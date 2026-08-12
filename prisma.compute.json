@@ -1,0 +1,10 @@
+{
+  "app": {
+    "name": "llm-arena",
+    "framework": "nextjs",
+    "httpPort": 3000,
+    "build": {
+      "command": "pnpm run build"
+    }
+  }
+}

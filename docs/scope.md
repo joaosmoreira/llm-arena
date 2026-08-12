@@ -18,7 +18,7 @@ There are rough hand-drawn sketches for the arena screen, the leaderboard, and t
 
 | #   | Feature                                     | Phase      | Status      |
 | --- | ------------------------------------------- | ---------- | ----------- |
-| 1   | Connecting to a model                       | Foundation | not started |
+| 1   | Connecting to a model                       | Foundation | done        |
 | 2   | Coding standards & tooling                  | Foundation | not started |
 | 3   | Data model                                  | Foundation | not started |
 | 4   | Design & look                               | Foundation | not started |
@@ -38,8 +38,31 @@ Two real decisions still open once that exists: how the app calls OpenRouter to 
 
 PostHog should be wired in from the start too, session replay and heatmaps turned on, and tied to the signed-in user once Clerk resolves, so events are attached to a real person, not left anonymous.
 
-- [ ] Decide the approach
-- [ ] Write the spec
+- [x] Decide the approach
+- [x] Write the spec
+- [x] Install & configure core packages (`ai`, `@openrouter/ai-sdk-provider`, `@posthog/ai`, `posthog-js`, `@arcjet/next`, `@clerk/nextjs`, `@prisma/client`, `@prisma/adapter-pg`, `pg`, `zod`)
+- [x] Configure fail-fast environment schema & validation (`lib/env.ts`, `.env.example`)
+- [x] Initialize Prisma singleton with PostgreSQL driver adapter (`lib/prisma.ts`)
+- [x] Setup Arcjet security guard with token bucket rate limiting, bot protection, and attack shield (`lib/arcjet.ts`)
+- [x] Configure OpenRouter AI SDK provider and PostHog server tracing wrapper (`lib/ai/openrouter.ts`)
+- [x] Setup PostHog client provider with Clerk authentication sync and session replay (`providers/posthog-provider.tsx`)
+- [x] Create Next.js proxy middleware for Clerk auth routing (`proxy.ts`)
+- [x] Implement `/api/chat` route with Arcjet protection, isolated streaming, and human error formatting (`app/api/chat/route.ts`)
+- [x] Typecheck, lint, production build all clean (`tsc`, `eslint`, `next build` passing with 0 errors)
+- [x] Apply the first Prisma migration against the real database (`pooled.db.prisma.io:5432`)
+- [x] Confirm a real prompt reaches a real model and returns valid output (`nvidia/nemotron-3.5-lightning:free`)
+- [x] Confirm Clerk auth gate and Arcjet rules behave (HTTP 401 gate before Arcjet call)
+- [x] Confirm PostHog receives events and client provider initializes
+- [x] Update scope.md with verified results
+
+#### Spec: Model Connection & Core Foundation
+- **Provider & SDK**: Vercel AI SDK (`ai`) with `@openrouter/ai-sdk-provider` for model inference, streaming responses, abort signals, and usage metadata.
+- **Streaming Architecture**: 3 independent parallel HTTP POST requests to `/api/chat` from the client. Each card operates its own stream lifecycle; failures or timeouts in one model stream do not affect others.
+- **Speed Metrics & Throughput**: Wall-clock throughput calculated as `outputTokens / (finishTime - requestStartTime)` in seconds. Directly comparable across streaming and buffering models; TTFT (Time to First Token) is tracked and presented as an independent metric alongside it.
+- **Observability**: `@posthog/ai` wrapper on server-side AI SDK provider for automatic per-call token, cost ($0.0000 free-tier), and latency tracking. Client-side `posthog-js` with session replay and heatmaps tied to Clerk `userId`.
+- **Security & Gatekeeping**: Arcjet middleware/guard on `/api/chat` enforcing rate limits, bot detection, and prompt injection shield.
+- **Auth & Database**: `@clerk/nextjs` for user identity and auth middleware; Prisma ORM singleton connected to PostgreSQL.
+- **Route Gating Correction**: `/api/chat` requires sign-in (HTTP 401 if unauthenticated) so Arcjet's token bucket is keyed by honest Clerk `userId` (preventing multi-model turn abuse), while feature 8 retains ownership of public thread reading and shareable URLs.
 
 ### 2. Coding standards & tooling
 

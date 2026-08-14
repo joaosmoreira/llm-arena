@@ -169,13 +169,17 @@ export async function castVote(input: CastVoteInput): Promise<CastVoteResult> {
     return { ok: false, refusal: "already-voted" };
   }
 
-  const completedResponses = turn.responses.filter((r) => r.status === "COMPLETED");
+  const completedResponses = turn.responses.filter(
+    (r: { status: string }) => r.status === "COMPLETED"
+  );
   if (completedResponses.length < 2) {
     return { ok: false, refusal: "not-enough-responses" };
   }
 
   // Ensure the voted response belongs to this turn
-  const winningResponse = turn.responses.find((r) => r.id === validated.modelResponseId);
+  const winningResponse = turn.responses.find(
+    (r: { id: string }) => r.id === validated.modelResponseId
+  );
   if (!winningResponse) {
     return { ok: false, refusal: "invalid-response" };
   }
@@ -192,7 +196,7 @@ export async function castVote(input: CastVoteInput): Promise<CastVoteResult> {
       },
     });
     return { ok: true, vote };
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       // Caught the race condition where another concurrent request wrote the vote first
       return { ok: false, refusal: "already-voted" };
@@ -251,29 +255,46 @@ export async function getLeaderboard(
   const modelNames: Record<string, string> = {};
 
   // Aggregate wins per model
-  const winsByModel = votes.reduce<Record<string, number>>((acc, vote) => {
-    const { modelId, modelName } = vote.modelResponse;
-    modelNames[modelId] = modelName;
-    acc[modelId] = (acc[modelId] ?? 0) + 1;
-    return acc;
-  }, {});
+  const winsByModel = votes.reduce<Record<string, number>>(
+    (
+      acc: Record<string, number>,
+      vote: { modelResponse: { modelId: string; modelName: string } }
+    ) => {
+      const { modelId, modelName } = vote.modelResponse;
+      modelNames[modelId] = modelName;
+      acc[modelId] = (acc[modelId] ?? 0) + 1;
+      return acc;
+    },
+    {}
+  );
 
   // Group performance metrics per model
   const metricsByModel = modelResponses.reduce<
     Record<string, { speeds: number[]; ttfts: number[] }>
-  >((acc, res) => {
-    modelNames[res.modelId] = res.modelName;
-    if (!acc[res.modelId]) {
-      acc[res.modelId] = { speeds: [], ttfts: [] };
-    }
-    if (typeof res.tokensPerSecond === "number") {
-      acc[res.modelId].speeds.push(res.tokensPerSecond);
-    }
-    if (typeof res.timeToFirstTokenMs === "number") {
-      acc[res.modelId].ttfts.push(res.timeToFirstTokenMs);
-    }
-    return acc;
-  }, {});
+  >(
+    (
+      acc: Record<string, { speeds: number[]; ttfts: number[] }>,
+      res: {
+        modelId: string;
+        modelName: string;
+        tokensPerSecond: number | null;
+        timeToFirstTokenMs: number | null;
+      }
+    ) => {
+      modelNames[res.modelId] = res.modelName;
+      if (!acc[res.modelId]) {
+        acc[res.modelId] = { speeds: [], ttfts: [] };
+      }
+      if (typeof res.tokensPerSecond === "number") {
+        acc[res.modelId].speeds.push(res.tokensPerSecond);
+      }
+      if (typeof res.timeToFirstTokenMs === "number") {
+        acc[res.modelId].ttfts.push(res.timeToFirstTokenMs);
+      }
+      return acc;
+    },
+    {}
+  );
 
   // Collect all unique model IDs
   const allModelIds = Array.from(
@@ -288,12 +309,14 @@ export async function getLeaderboard(
 
       const avgSpeed =
         modelMetrics.speeds.length > 0
-          ? modelMetrics.speeds.reduce((sum, val) => sum + val, 0) / modelMetrics.speeds.length
+          ? modelMetrics.speeds.reduce((sum: number, val: number) => sum + val, 0) /
+            modelMetrics.speeds.length
           : 0;
 
       const avgTtft =
         modelMetrics.ttfts.length > 0
-          ? modelMetrics.ttfts.reduce((sum, val) => sum + val, 0) / modelMetrics.ttfts.length
+          ? modelMetrics.ttfts.reduce((sum: number, val: number) => sum + val, 0) /
+            modelMetrics.ttfts.length
           : 0;
 
       return {

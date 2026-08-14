@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { saveModelResponse } from "@/lib/db/queries";
+import { saveModelResponse, getTurnById } from "@/lib/db/queries";
 import { saveModelResponseSchema } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 
@@ -27,6 +27,22 @@ export async function POST(req: Request) {
           retryable: false,
         },
         { status: 400 }
+      );
+    }
+
+    // Resolve turn to enforce thread ownership
+    const turn = await getTurnById(parsed.data.turnId);
+    if (!turn) {
+      return Response.json({ error: "Turn was not found.", retryable: false }, { status: 404 });
+    }
+
+    if (turn.thread.user.clerkId !== effectiveUserId && turn.thread.userId !== effectiveUserId) {
+      return Response.json(
+        {
+          error: "You do not have permission to modify responses for this conversation.",
+          retryable: false,
+        },
+        { status: 403 }
       );
     }
 

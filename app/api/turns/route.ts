@@ -46,6 +46,17 @@ export async function POST(req: Request) {
       );
     }
 
+    // Enforce thread ownership
+    if (thread.user.clerkId !== effectiveUserId && thread.userId !== effectiveUserId) {
+      return Response.json(
+        {
+          error: "You do not have permission to add turns to this conversation.",
+          retryable: false,
+        },
+        { status: 403 }
+      );
+    }
+
     // Find models used in this thread
     const distinctModels = new Map<string, string>();
     thread.turns.forEach((t) => {

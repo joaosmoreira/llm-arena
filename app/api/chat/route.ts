@@ -169,16 +169,25 @@ export async function POST(req: Request) {
     if (!upstream.ok) {
       const errBody = (await upstream.json().catch(() => ({}))) as { error?: { message?: string } };
       const raw = errBody?.error?.message ?? `HTTP ${upstream.status}`;
-      const friendly = raw.includes("free-models-per-day")
-        ? "OpenRouter daily free-tier limit reached on all keys."
-        : upstream.status === 429
-          ? "Model rate limit reached. Please wait a few seconds and try again."
-          : upstream.status === 401
-            ? "OpenRouter API key is invalid or missing."
-            : raw;
-      console.error(`[Chat API] OpenRouter ${upstream.status} for ${modelId}:`, friendly);
+
+      let friendly: string;
+      if (raw.includes("free-models-per-day")) {
+        friendly =
+          "OpenRouter daily free-tier limit reached on all keys. Please try again later or wait for daily reset at midnight UTC.";
+      } else if (upstream.status === 429) {
+        friendly = "Model rate limit reached. Please wait a few seconds and try again.";
+      } else if (upstream.status === 401) {
+        friendly = "AI provider authentication failed. Please check system configuration.";
+      } else if (upstream.status === 502 || upstream.status === 503 || upstream.status === 504) {
+        friendly =
+          "The model provider is temporarily unavailable. Please try again in a few moments.";
+      } else {
+        friendly = "The model provider returned an unexpected error. Please retry your prompt.";
+      }
+
+      console.error(`[Chat API] Upstream error (${upstream.status}) for ${modelId}:`, raw);
       return Response.json(
-        { error: friendly, retryable: upstream.status === 429 },
+        { error: friendly, retryable: upstream.status === 429 || upstream.status >= 500 },
         { status: upstream.status }
       );
     }

@@ -82,6 +82,27 @@ export async function getThreadById(threadId: string) {
 }
 
 /**
+ * Get a turn by ID including its parent thread and owner information
+ */
+export async function getTurnById(turnId: string) {
+  return prisma.turn.findUnique({
+    where: { id: turnId },
+    include: {
+      thread: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              clerkId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+/**
  * Get all threads for a specific user (sidebar history)
  */
 export async function getUserThreads(userId: string) {

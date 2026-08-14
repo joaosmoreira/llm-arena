@@ -12,7 +12,7 @@ interface MarkdownRendererProps {
 
 /**
  * Separate thinking/reasoning process from the final answer.
- * Handles <think> tags, Nemotron-style thinking intros, and raw reasoning tokens.
+ * Handles <think> tags, Nemotron-style thinking intros, and internal reasoning monologues.
  */
 function parseThinkingAndContent(rawText: string): {
   thinking: string | null;
@@ -38,14 +38,27 @@ function parseThinkingAndContent(rawText: string): {
     };
   }
 
-  // 3. Check for Nemotron-style intro: "Here's a thinking process: ... Output: ..."
+  // 3. Check for Nemotron/Cohere-style reasoning monologue:
+  // "Here's a thinking process: ... Output: ..." or "The user asks: ... The system says: ... [Answer]"
   const nemotronMatch = rawText.match(
-    /^Here(?:'s| is) a thinking process:([\s\S]*?)(?:\n\n(?=[A-Z0-9#*`])|\n\n---\n\n|\n\n(?:Final Output|Output):\s*)([\s\S]*)$/i
+    /^Here(?:'s| is) a thinking process:?([\s\S]*?)(?:\n\n---\n\n|\n\n(?=[#*`A-Z])|\n\n(?:Final Output|Output):\s*)([\s\S]*)$/i
   );
   if (nemotronMatch && nemotronMatch[2]?.trim()) {
     return {
-      thinking: nemotronMatch[1].trim() || null,
+      thinking: `Here's a thinking process:${nemotronMatch[1].trim()}`,
       mainContent: nemotronMatch[2].trim(),
+    };
+  }
+
+  // 4. Check for system deliberation preamble (e.g. "The user asks:... The system says:... So we comply: ...")
+  const cohereDelibMatch = rawText.match(
+    /^(?:The user asks:[\s\S]*?So we comply:[^\n]*\n*)([\s\S]*)$/i
+  );
+  if (cohereDelibMatch && cohereDelibMatch[1]?.trim()) {
+    const thinkingPart = rawText.slice(0, rawText.length - cohereDelibMatch[1].length).trim();
+    return {
+      thinking: thinkingPart || null,
+      mainContent: cohereDelibMatch[1].trim(),
     };
   }
 
@@ -68,31 +81,31 @@ function CodeBlock({ children, className }: { children?: React.ReactNode; classN
   };
 
   return (
-    <div className="border-border/60 bg-muted/40 my-3 overflow-hidden rounded-lg border">
-      <div className="border-border/40 bg-muted/70 flex items-center justify-between border-b px-3 py-1.5 text-[11px]">
+    <div className="border-border/60 bg-muted/40 my-3.5 overflow-hidden rounded-lg border shadow-xs">
+      <div className="border-border/40 bg-muted/70 flex items-center justify-between border-b px-3.5 py-1.5 text-[11px]">
         <span className="text-muted-foreground font-mono font-medium lowercase">
           {language || "code"}
         </span>
         <button
           type="button"
           onClick={handleCopy}
-          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1 transition-colors"
+          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 transition-colors"
           title="Copy code"
         >
           {copied ? (
             <>
-              <Check className="text-winner size-3" />
-              <span className="text-[10px]">Copied</span>
+              <Check className="text-winner size-3.5" />
+              <span className="text-winner text-[11px] font-medium">Copied!</span>
             </>
           ) : (
             <>
-              <Copy className="size-3" />
-              <span className="text-[10px]">Copy</span>
+              <Copy className="size-3.5" />
+              <span className="text-[11px]">Copy</span>
             </>
           )}
         </button>
       </div>
-      <pre className="text-foreground overflow-x-auto p-3 font-mono text-[12px] leading-relaxed">
+      <pre className="text-foreground overflow-x-auto p-3.5 font-mono text-[12px] leading-relaxed">
         <code>{children}</code>
       </pre>
     </div>
@@ -107,7 +120,7 @@ export function MarkdownRenderer({ content, isStreaming = false }: MarkdownRende
   const [thinkingOpen, setThinkingOpen] = React.useState(false);
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       {/* Collapsible Thinking / Reasoning Section */}
       {thinking && (
         <div className="border-border/50 bg-muted/20 overflow-hidden rounded-lg border text-xs">
@@ -131,89 +144,91 @@ export function MarkdownRenderer({ content, isStreaming = false }: MarkdownRende
           </button>
 
           {thinkingOpen && (
-            <div className="border-border/30 text-muted-foreground/80 border-t px-3 py-2.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+            <div className="border-border/30 text-muted-foreground/80 border-t px-3.5 py-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
               {thinking}
             </div>
           )}
         </div>
       )}
 
-      {/* Main Formatted Markdown Content */}
-      <div className="prose prose-neutral dark:prose-invert text-foreground/90 max-w-none text-xs leading-relaxed">
+      {/* Main Formatted Markdown Content with Enhanced Readability */}
+      <div className="text-foreground/90 font-sans text-[13px] leading-[1.65] break-words">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
             p: ({ children }) => (
-              <p className="text-foreground/90 mb-2.5 text-[12.5px] leading-relaxed last:mb-0">
+              <p className="text-foreground/90 mb-3 text-[13px] leading-[1.65] last:mb-0">
                 {children}
               </p>
             ),
             h1: ({ children }) => (
-              <h1 className="text-foreground mt-4 mb-2 text-base font-bold first:mt-0">
+              <h1 className="text-foreground mt-5 mb-2.5 text-base font-bold tracking-tight first:mt-0">
                 {children}
               </h1>
             ),
             h2: ({ children }) => (
-              <h2 className="text-foreground mt-3.5 mb-1.5 text-sm font-semibold first:mt-0">
+              <h2 className="text-foreground mt-4 mb-2 text-sm font-semibold tracking-tight first:mt-0">
                 {children}
               </h2>
             ),
             h3: ({ children }) => (
-              <h3 className="text-foreground mt-3 mb-1 text-xs font-semibold first:mt-0">
+              <h3 className="text-foreground mt-3.5 mb-1.5 text-[13px] font-semibold first:mt-0">
                 {children}
               </h3>
             ),
             h4: ({ children }) => (
-              <h4 className="text-foreground mt-2 mb-1 text-xs font-medium first:mt-0">
+              <h4 className="text-foreground mt-3 mb-1 text-[12.5px] font-medium first:mt-0">
                 {children}
               </h4>
             ),
             ul: ({ children }) => (
-              <ul className="text-foreground/90 my-2 list-disc space-y-1 pl-4 text-[12.5px]">
+              <ul className="text-foreground/90 my-2.5 list-disc space-y-1.5 pl-5 text-[13px]">
                 {children}
               </ul>
             ),
             ol: ({ children }) => (
-              <ol className="text-foreground/90 my-2 list-decimal space-y-1 pl-4 text-[12.5px]">
+              <ol className="text-foreground/90 my-2.5 list-decimal space-y-1.5 pl-5 text-[13px]">
                 {children}
               </ol>
             ),
-            li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+            li: ({ children }) => <li className="pl-0.5 leading-relaxed">{children}</li>,
             strong: ({ children }) => (
               <strong className="text-foreground font-semibold">{children}</strong>
             ),
             em: ({ children }) => <em className="text-foreground/90 italic">{children}</em>,
             blockquote: ({ children }) => (
-              <blockquote className="border-primary/40 text-muted-foreground my-2.5 border-l-2 pl-3 italic">
+              <blockquote className="border-primary/60 bg-muted/20 text-muted-foreground my-3 rounded-r-md border-l-3 px-3.5 py-2 text-[12.5px] italic">
                 {children}
               </blockquote>
             ),
-            hr: () => <hr className="border-border/60 my-3" />,
+            hr: () => <hr className="border-border/60 my-4" />,
             a: ({ href, children }) => (
               <a
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary hover:underline"
+                className="text-primary font-medium underline underline-offset-2 hover:opacity-80"
               >
                 {children}
               </a>
             ),
             table: ({ children }) => (
-              <div className="my-3 overflow-x-auto">
-                <table className="border-border/60 w-full border-collapse border text-[11px]">
-                  {children}
-                </table>
+              <div className="border-border/60 my-3.5 overflow-x-auto rounded-lg border">
+                <table className="w-full border-collapse text-left text-xs">{children}</table>
               </div>
             ),
-            thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
+            thead: ({ children }) => (
+              <thead className="bg-muted/70 text-foreground border-border/60 border-b font-semibold">
+                {children}
+              </thead>
+            ),
             th: ({ children }) => (
-              <th className="border-border/60 text-foreground px-2.5 py-1.5 text-left font-semibold">
+              <th className="text-foreground border-border/40 border-r px-3.5 py-2 font-semibold last:border-r-0">
                 {children}
               </th>
             ),
             td: ({ children }) => (
-              <td className="border-border/40 text-foreground/90 border px-2.5 py-1.5">
+              <td className="text-foreground/85 border-border/30 border-border/30 border-t border-r px-3.5 py-2 last:border-r-0">
                 {children}
               </td>
             ),
@@ -224,7 +239,7 @@ export function MarkdownRenderer({ content, isStreaming = false }: MarkdownRende
               }
               return (
                 <code
-                  className="bg-muted/80 text-primary rounded px-1.5 py-0.5 font-mono text-[11px]"
+                  className="bg-muted/80 text-primary rounded px-1.5 py-0.5 font-mono text-[12px] font-medium"
                   {...props}
                 >
                   {children}
@@ -238,7 +253,7 @@ export function MarkdownRenderer({ content, isStreaming = false }: MarkdownRende
         </ReactMarkdown>
 
         {isStreaming && (
-          <span className="bg-primary ml-1 inline-block h-3.5 w-1 animate-pulse align-middle" />
+          <span className="bg-primary ml-1 inline-block h-4 w-1 animate-pulse align-middle" />
         )}
       </div>
     </div>

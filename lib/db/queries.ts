@@ -217,25 +217,55 @@ export type CastVoteResult =
   | {
       readonly ok: false;
       readonly refusal:
-        "already-voted" | "turn-not-found" | "not-enough-responses" | "invalid-response";
+        | "already-voted"
+        | "turn-not-found"
+        | "not-enough-responses"
+        | "invalid-response"
+        | "unauthorized";
     };
 
 /**
  * Record a vote for a specific turn with race-condition safety.
- * Enforces rule: voting is only allowed when 2+ models answered,
- * and catches P2002 unique constraint violations on turnId gracefully.
+ * Enforces rules:
+ * 1. User must own the parent thread of the turn.
+ * 2. Voting is only allowed when 2+ models answered.
+ * 3. Catches P2002 unique constraint violations on turnId gracefully.
  */
 export async function castVote(input: CastVoteInput): Promise<CastVoteResult> {
   const validated = castVoteSchema.parse(input);
 
-  // Verify turn has at least 2 completed responses
+  // Verify turn exists and load thread owner
   const turn = await prisma.turn.findUnique({
     where: { id: validated.turnId },
-    include: { responses: true, vote: true },
+    include: {
+      responses: true,
+      vote: true,
+      thread: {
+        select: {
+          userId: true,
+          user: {
+            select: {
+              id: true,
+              clerkId: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!turn) {
     return { ok: false, refusal: "turn-not-found" };
+  }
+
+  // Enforce thread ownership
+  const isOwner =
+    turn.thread.userId === validated.userId ||
+    turn.thread.user.id === validated.userId ||
+    turn.thread.user.clerkId === validated.userId;
+
+  if (!isOwner) {
+    return { ok: false, refusal: "unauthorized" };
   }
 
   if (turn.vote) {

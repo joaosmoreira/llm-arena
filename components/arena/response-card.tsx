@@ -15,6 +15,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "@/infrastructure/ui-kit/card";
 import { Button } from "@/infrastructure/ui-kit/button";
 import { Skeleton } from "@/infrastructure/ui-kit/skeleton";
+import { MarkdownRenderer } from "@/components/arena/markdown-renderer";
 
 export interface ModelResponseCardProps {
   id: string;
@@ -149,11 +150,8 @@ export function ResponseCard({
             <Skeleton className="h-4 w-4/6" />
           </div>
         ) : (
-          <div className="text-foreground/90 font-sans text-xs leading-relaxed whitespace-pre-wrap">
-            {response}
-            {isStreaming && (
-              <span className="bg-primary ml-0.5 inline-block h-3.5 w-1 animate-pulse align-middle" />
-            )}
+          <div className="flex-1">
+            <MarkdownRenderer content={response} isStreaming={isStreaming} />
           </div>
         )}
 

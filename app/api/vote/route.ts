@@ -57,6 +57,14 @@ export async function POST(req: Request) {
 
     if (!result.ok) {
       switch (result.refusal) {
+        case "unauthorized":
+          return Response.json(
+            {
+              error: "You do not have permission to vote on this conversation.",
+              retryable: false,
+            },
+            { status: 403 }
+          );
         case "already-voted":
           return Response.json(
             { error: "A vote has already been cast for this turn.", retryable: false },

@@ -19,10 +19,10 @@ There are rough hand-drawn sketches for the arena screen, the leaderboard, and t
 | #   | Feature                                     | Phase      | Status      |
 | --- | ------------------------------------------- | ---------- | ----------- |
 | 1   | Connecting to a model                       | Foundation | done        |
-| 2   | Coding standards & tooling                  | Foundation | not started |
-| 3   | Data model                                  | Foundation | not started |
-| 4   | Design & look                               | Foundation | not started |
-| 5   | Model picker                                | Slice 1    | not started |
+| 2   | Coding standards & tooling                  | Foundation | done        |
+| 3   | Data model                                  | Foundation | done        |
+| 4   | Design & look                               | Foundation | done        |
+| 5   | Model picker                                | Slice 1    | done        |
 | 6   | Send a prompt, parallel streams, and voting | Slice 1    | not started |
 | 7   | App shell & thread history                  | Slice 2    | not started |
 | 8   | Public thread visibility & sharing          | Slice 3    | not started |
@@ -56,6 +56,7 @@ PostHog should be wired in from the start too, session replay and heatmaps turne
 - [x] Update scope.md with verified results
 
 #### Spec: Model Connection & Core Foundation
+
 - **Provider & SDK**: Vercel AI SDK (`ai`) with `@openrouter/ai-sdk-provider` for model inference, streaming responses, abort signals, and usage metadata.
 - **Streaming Architecture**: 3 independent parallel HTTP POST requests to `/api/chat` from the client. Each card operates its own stream lifecycle; failures or timeouts in one model stream do not affect others.
 - **Speed Metrics & Throughput**: Wall-clock throughput calculated as `outputTokens / (finishTime - requestStartTime)` in seconds. Directly comparable across streaming and buffering models; TTFT (Time to First Token) is tracked and presented as an independent metric alongside it.
@@ -68,22 +69,62 @@ PostHog should be wired in from the start too, session replay and heatmaps turne
 
 Write down the real conventions for this project once it actually exists, then install linting, formatting, and a pre-commit hook that actually enforces them.
 
-- [ ] Decide the approach
-- [ ] Install lint, format, and whatever else is needed, and write it up in a coding-standards doc
+- [x] Decide the approach
+- [x] Install Prettier (`prettier`, `prettier-plugin-tailwindcss`), configure `.prettierrc.json` and `.prettierignore`
+- [x] Configure fast sub-second pre-commit hook with Husky and `lint-staged` (`.lintstagedrc.json`, `.husky/pre-commit`)
+- [x] Add developer scripts (`format`, `format:check`, `lint`, `lint:fix`, `typecheck`) to `package.json`
+- [x] Write comprehensive standards document in `docs/coding-standards.md`
+- [x] Verify formatting, linting, typechecking, and production build
+
+#### Spec: Coding Standards & Tooling
+
+- **Formatting**: Prettier with Tailwind CSS plugin for automated code formatting and class ordering.
+- **Linting**: ESLint with Next.js core web vitals and TypeScript rules.
+- **Git Hooks**: Husky running `lint-staged` on staged files only (Prettier + ESLint fix) for instant commits without blocking developers.
+- **Documentation**: `docs/coding-standards.md` defines feature architecture, immutability, strict TypeScript with Zod schemas, color tokens (warm coffee baseline, rust interactive accent only), error masking, and observability.
 
 ### 3. Data model
 
 The core things every feature depends on: users tied to Clerk, threads, each model's own messages inside a thread, and votes. A vote should only ever be possible on a turn where two or more models actually answered.
 
-- [ ] Decide the approach
-- [ ] Build it
+- [x] Decide the approach
+- [x] Write schema in `prisma/schema.prisma` (`User`, `Thread`, `Turn`, `ModelResponse`, `Vote`)
+- [x] Push/migrate schema to PostgreSQL database
+- [x] Generate typed Prisma client (`app/generated/prisma`)
+- [x] Create domain repository/helpers and Zod schemas (`lib/db/`)
+- [x] Test database operations with mock end-to-end flow (user, thread, turn, model responses, vote)
+- [x] Verify lint, typecheck, and build pass cleanly
+
+#### Spec: Data Model
+
+- **Entities**:
+  - `User`: Tied to Clerk `clerkId`, cascades deletes to owned threads and votes.
+  - `Thread`: Stores `userId`, `title`, timestamps, and relation to `Turn[]`.
+  - `Turn`: Conversational turn (`threadId`, `prompt`, `createdAt`), indexed on `[threadId, createdAt]`.
+  - `ModelResponse`: Stores independent model answer per turn with captured metrics (`timeToFirstTokenMs`, `tokensPerSecond`, `inputTokens`, `outputTokens`, `totalTokens`, `costUsd`, `status`, `errorMessage`). Unique on `[turnId, modelId]` and indexed on `modelId` for leaderboard queries.
+  - `Vote`: Exactly 1 vote per turn (`turnId` unique constraint), tied to `userId` and `modelResponseId`.
+- **Integrity**: Full cascade delete (`onDelete: Cascade`) ensures deleting a user or thread cleans up all nested turns, responses, and votes cleanly without orphan records.
 
 ### 4. Design & look
 
 A coffee or dark brown background, warm, not neutral gray or true black. One accent color, rust, used only for things you interact with, buttons, links, focus states, the win-rate bar, never as decoration. Because the background and the accent are both warm tones from the same family, the accent has to stay clearly brighter and more saturated than the background, enough that a button never blends into the page behind it, that's a real risk with two warm colors this close and worth checking by eye, not just by the numbers. Blue, indigo, and purple are never the accent, under any circumstance. Green is reserved only for marking a winner, red only for errors, never reused for anything else. Contrast should genuinely hold up in both light and dark mode, not just look fine at a glance.
 
-- [ ] Decide the approach
-- [ ] Build it
+- [x] Decide the approach
+- [x] Configure Tailwind CSS v4 CSS variables & theme in `app/globals.css` (warm coffee `#140f0c` baseline, warm parchment `#faf6f0` light mode, vivid rust `#e05d26` interactive accent)
+- [x] Install and configure `next-themes` with zero-hydration-flicker provider (`providers/theme-provider.tsx`)
+- [x] Build core UI primitives in `components/ui/` (`Button`, `Card`, `Badge`, `Progress`, `Skeleton`, `ThemeToggle`)
+- [x] Set up UI showcase in `app/page.tsx` displaying the multi-model arena cards, live metrics drawer, winner state, and prompt dock
+- [x] Verify strict typecheck, linting, formatting, and Next.js production build (`tsc`, `eslint`, `next build`)
+
+#### Spec: Design System & Look
+
+- **Color Tokens**:
+  - Dark Mode Background: Warm espresso `#140f0c` with roast card surfaces `#1e1713` and border `#3a2c24`.
+  - Light Mode Background: Warm parchment `#faf6f0` with warm white cards `#ffffff` and border `#e6ded4`.
+  - Interactive Accent: Vivid Rust (`#e05d26` dark, `#c8521e` light) strictly for buttons, focus rings, active links, and win-rate progress bars. Prohibits blue, indigo, and purple.
+  - Semantic Statuses: Emerald Green (`#2ea043`) strictly for winner badges; Terracotta Red (`#e5534b`) strictly for error messages.
+- **Typography & Font Stacks**: `Geist Sans` for UI copy; `Geist Mono` for token speeds, latencies, and metrics.
+- **Components**: Reusable Tailwind + Radix primitives in `components/ui/` adhering to accessible focus states and dark/light mode parity.
 
 ## Slice 1: Core arena loop
 
@@ -91,8 +132,21 @@ A coffee or dark brown background, warm, not neutral gray or true black. One acc
 
 An "Add model" popover pulling OpenRouter's live free-tier list, sorted by context window, capped at three models, defaulting to all three selected, with removable chips next to the prompt box. Also render that same catalog as a simple `/models` page, name, context window, and pricing for each one, so anyone can browse the full list without opening the picker.
 
-- [ ] Decide the approach
-- [ ] Build it
+- [x] Decide the approach
+- [x] Fetch live OpenRouter free-tier models sorted by context window (`lib/ai/models.ts`)
+- [x] Build cached `/api/models` endpoint for client components (`app/api/models/route.ts`)
+- [x] Implement accessible Radix `Popover` primitive (`components/ui/popover.tsx`)
+- [x] Build `ModelPickerPopover` with search, context length indicators, and 1-3 model caps (`components/arena/model-picker-popover.tsx`)
+- [x] Integrate model picker and removable model chips into `PromptDock` (`components/arena/prompt-dock.tsx`)
+- [x] Build live `/models` server-rendered catalog page (`app/models/page.tsx`)
+- [x] Verify typechecking, formatting, linting, and production build (`tsc`, `eslint`, `next build`)
+
+#### Spec: Model Picker & Models Page
+
+- **Data Source**: OpenRouter live API (`https://openrouter.ai/api/v1/models`), filtering `:free` and `$0.00` models, sorted by `context_length` descending with resilient curated fallback (`lib/ai/models.ts`).
+- **Picker Behavior**: Radix popover anchored to `+ Add Model` trigger in prompt dock. Allows searching by model name or provider, displays context size badges, and enforces min 1 and max 3 selected models.
+- **Model Chips**: Active models displayed as removable tags above the textarea in the prompt dock.
+- **Catalog Page**: Dedicated `/models` page displaying full model cards, context window, $0.00 pricing, and provider info.
 
 ### 6. Send a prompt, parallel streams, and voting
 

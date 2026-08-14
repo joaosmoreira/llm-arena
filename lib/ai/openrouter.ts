@@ -1,6 +1,7 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { withTracing } from "@posthog/ai";
 import { PostHog } from "posthog-node";
+import { env } from "@/lib/env";
 
 // Free tier default models for quick reference
 export const DEFAULT_FREE_MODELS = [
@@ -12,8 +13,8 @@ export const DEFAULT_FREE_MODELS = [
 let posthogNodeClient: PostHog | null = null;
 
 export function getPostHogServerClient(): PostHog | null {
-  const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
-  const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
+  const projectToken = env.POSTHOG_API_KEY || env.NEXT_PUBLIC_POSTHOG_KEY;
+  const host = env.POSTHOG_HOST;
   if (!projectToken || !host) return null;
 
   if (!posthogNodeClient) {
@@ -23,7 +24,7 @@ export function getPostHogServerClient(): PostHog | null {
 }
 
 export function getOpenRouterProvider(apiKey?: string) {
-  const key = apiKey || process.env.OPENROUTER_API_KEY;
+  const key = apiKey || env.OPENROUTER_API_KEY;
   if (!key) {
     throw new Error(
       "OpenRouter API key is missing. Please set OPENROUTER_API_KEY in your environment (.env.local)."
@@ -51,17 +52,13 @@ export function getLanguageModel(
 
   const phClient = getPostHogServerClient();
   if (phClient) {
-    return withTracing(
-      rawModel as unknown as Parameters<typeof withTracing>[0],
-      phClient,
-      {
-        posthogDistinctId: options?.userId || "anonymous",
-        posthogProperties: {
-          threadId: options?.threadId,
-          isFreeTier: true,
-        },
-      }
-    );
+    return withTracing(rawModel as unknown as Parameters<typeof withTracing>[0], phClient, {
+      posthogDistinctId: options?.userId || "anonymous",
+      posthogProperties: {
+        threadId: options?.threadId,
+        isFreeTier: true,
+      },
+    });
   }
 
   return rawModel;

@@ -1,11 +1,12 @@
 import arcjet, { detectBot, shield, tokenBucket } from "@arcjet/next";
+import { env } from "@/lib/env";
 
 // Initialized Arcjet security client
 // In development without an ARCJET_KEY, rules default to DRY_RUN so local development works smoothly
-const hasArcjetKey = Boolean(process.env.ARCJET_KEY);
+const hasArcjetKey = Boolean(env.ARCJET_KEY);
 
 export const aj = arcjet({
-  key: process.env.ARCJET_KEY ?? "ajkey_dev_placeholder",
+  key: env.ARCJET_KEY ?? "ajkey_dev_placeholder",
   rules: [
     // Shield protects against common attacks like SQL injection, XSS, and prompt injection
     shield({

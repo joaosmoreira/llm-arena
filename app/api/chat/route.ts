@@ -22,39 +22,19 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    // 1. Require sign-in on /api/chat
-    // Cheaper than paying for an Arcjet decision on a request that cannot proceed
     const { userId } = await auth();
-    if (!userId) {
-      return Response.json(
-        {
-          error: "Please sign in to send prompts and vote on models.",
-          retryable: false,
-        },
-        { status: 401 }
-      );
-    }
 
-    // 2. Validate request body
-    const body = await req.json().catch(() => null);
+    // 1. Validate request body or extract prompt for safety inspection
+    const body = await req
+      .clone()
+      .json()
+      .catch(() => null);
     const parsed = chatRequestSchema.safeParse(body);
+    const lastUserPrompt = parsed.success
+      ? [...parsed.data.messages].reverse().find((m) => m.role === "user")?.content
+      : undefined;
 
-    if (!parsed.success) {
-      return Response.json(
-        {
-          error: "Invalid request payload. Please check the model and prompt format.",
-          details: parsed.error.flatten().fieldErrors,
-          retryable: false,
-        },
-        { status: 400 }
-      );
-    }
-
-    const { modelId, messages, threadId } = parsed.data;
-    const lastUserPrompt =
-      [...messages].reverse().find((m) => m.role === "user")?.content || "prompt";
-
-    // 3. Layer route rules onto base Arcjet client
+    // 2. Layer route rules onto base Arcjet client and execute protection
     const protectedAj = aj
       .withRule(
         detectBot({
@@ -68,7 +48,7 @@ export async function POST(req: Request) {
           refillRate: 5,
           interval: 10,
           capacity: 10,
-          characteristics: ["userId"],
+          characteristics: userId ? ["userId"] : ["ip.src"],
         })
       )
       .withRule(
@@ -78,9 +58,9 @@ export async function POST(req: Request) {
       );
 
     const decision = await protectedAj.protect(req, {
-      userId,
+      userId: userId || "anonymous",
       requested: 1,
-      detectPromptInjectionMessage: lastUserPrompt,
+      detectPromptInjectionMessage: lastUserPrompt || "",
     });
 
     if (decision.isErrored()) {
@@ -128,7 +108,32 @@ export async function POST(req: Request) {
       );
     }
 
-    // 4. Instantiate model with OpenRouter + PostHog tracing
+    // 3. Require sign-in on /api/chat for actual model inference
+    if (!userId) {
+      return Response.json(
+        {
+          error: "Please sign in to send prompts and vote on models.",
+          retryable: false,
+        },
+        { status: 401 }
+      );
+    }
+
+    // 4. Validate schema
+    if (!parsed.success) {
+      return Response.json(
+        {
+          error: "Invalid request payload. Please check the model and prompt format.",
+          details: parsed.error.flatten().fieldErrors,
+          retryable: false,
+        },
+        { status: 400 }
+      );
+    }
+
+    const { modelId, messages, threadId } = parsed.data;
+
+    // 5. Instantiate model with OpenRouter + PostHog tracing
     const model = getLanguageModel(modelId, { userId, threadId });
 
     // 5. Stream response

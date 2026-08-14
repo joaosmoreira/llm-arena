@@ -46,4 +46,5 @@ Connect the real MCP servers for Prisma and PostHog once their accounts exist, s
 
 ## Context files
 
-_Nested context files, if any get created for a specific part of the codebase, are listed here._
+- `docs/coding-standards.md` — Project engineering standards, formatting, linting rules, architectural paradigms, design tokens, security boundaries, and telemetry patterns.
+- `docs/scope.md` — Living plan, feature tracker, and foundation specifications.

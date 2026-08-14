@@ -7,9 +7,9 @@ import {
   CardDescription,
   CardContent,
   CardFooter,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { getAvailableFreeModels } from "@/lib/ai/models";
+} from "@/infrastructure/ui-kit/card";
+import { Badge } from "@/infrastructure/ui-kit/badge";
+import { fetchAvailableFreeModels } from "@/infrastructure/fetch-model-catalog";
 
 export const metadata = {
   title: "Models Catalog | LLM Arena",
@@ -18,7 +18,7 @@ export const metadata = {
 };
 
 export default async function ModelsPage() {
-  const models = await getAvailableFreeModels();
+  const models = await fetchAvailableFreeModels();
 
   return (
     <AppShell breadcrumb="Models" threadTitle="OpenRouter Free-Tier Catalog">

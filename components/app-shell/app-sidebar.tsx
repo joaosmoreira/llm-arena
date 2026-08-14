@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton, SignInButton, useUser } from "@clerk/nextjs";
 import { Trophy, LayoutDashboard, Award, Layers, Plus, MessageSquare } from "lucide-react";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/infrastructure/ui-kit/theme-toggle";
+import { Button } from "@/infrastructure/ui-kit/button";
 
 interface AppSidebarProps {
   isOpen: boolean;
@@ -16,37 +16,79 @@ interface AppSidebarProps {
 export interface ThreadItem {
   id: string;
   title: string;
-  updatedAt: string;
-  isActive?: boolean;
+  updatedAt?: string;
+  createdAt?: string;
+  _count?: {
+    turns: number;
+  };
 }
 
-const PLACEHOLDER_THREADS: ThreadItem[] = [
-  {
-    id: "thread-1",
-    title: "Quantum physics superposition intro",
-    updatedAt: "10m ago",
-    isActive: true,
-  },
-  {
-    id: "thread-2",
-    title: "Rust vs Go memory concurrency",
-    updatedAt: "2h ago",
-  },
-  {
-    id: "thread-3",
-    title: "PostgreSQL indexing & B-tree query plan",
-    updatedAt: "Yesterday",
-  },
-  {
-    id: "thread-4",
-    title: "Explain Transformers architecture",
-    updatedAt: "2 days ago",
-  },
-];
+type TimeBucket = "Today" | "This week" | "Earlier";
+
+interface GroupedThreads {
+  readonly label: TimeBucket;
+  readonly threads: readonly ThreadItem[];
+}
+
+function groupThreadsByTime(threads: readonly ThreadItem[]): readonly GroupedThreads[] {
+  const now = new Date();
+  // Start of today (local time midnight)
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  // Start of 7 days ago
+  const sevenDaysAgo = startOfToday - 6 * 24 * 60 * 60 * 1000;
+
+  const today: ThreadItem[] = [];
+  const thisWeek: ThreadItem[] = [];
+  const earlier: ThreadItem[] = [];
+
+  for (const thread of threads) {
+    const rawDate = thread.updatedAt || thread.createdAt;
+    const threadTime = rawDate ? new Date(rawDate).getTime() : 0;
+
+    if (threadTime >= startOfToday) {
+      today.push(thread);
+    } else if (threadTime >= sevenDaysAgo) {
+      thisWeek.push(thread);
+    } else {
+      earlier.push(thread);
+    }
+  }
+
+  const groups: GroupedThreads[] = [];
+  if (today.length > 0) groups.push({ label: "Today", threads: today });
+  if (thisWeek.length > 0) groups.push({ label: "This week", threads: thisWeek });
+  if (earlier.length > 0) groups.push({ label: "Earlier", threads: earlier });
+
+  return groups;
+}
 
 export function AppSidebar({ isOpen }: AppSidebarProps) {
   const pathname = usePathname();
   const { isSignedIn, user } = useUser();
+  const [threads, setThreads] = React.useState<readonly ThreadItem[]>([]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    fetch("/api/threads")
+      .then((res) => res.json())
+      .then((data) => {
+        if (isMounted && Array.isArray(data.threads)) {
+          setThreads(data.threads);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isSignedIn, pathname]);
+
+  const displayedThreads = threads;
+  const groupedThreads = React.useMemo(
+    () => groupThreadsByTime(displayedThreads),
+    [displayedThreads]
+  );
 
   return (
     <aside
@@ -117,27 +159,44 @@ export function AppSidebar({ isOpen }: AppSidebarProps) {
           </Link>
         </div>
 
-        <div className="flex-1 space-y-1 overflow-y-auto pr-1">
-          {PLACEHOLDER_THREADS.map((thread) => {
-            const isCurrentActive = pathname === `/t/${thread.id}`;
-            return (
-              <Link
-                key={thread.id}
-                href={`/t/${thread.id}`}
-                className={`group flex w-full cursor-pointer items-center justify-between rounded-md px-2.5 py-2 text-left text-xs transition-colors ${
-                  isCurrentActive
-                    ? "bg-muted/90 text-foreground border-border/50 border font-medium"
-                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-                }`}
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <MessageSquare className="group-hover:text-primary size-3.5 shrink-0 opacity-70" />
-                  <span className="truncate">{thread.title}</span>
+        <div className="flex-1 space-y-4 overflow-y-auto pr-1">
+          {displayedThreads.length === 0 ? (
+            <div className="text-muted-foreground/70 px-2 py-4 text-center text-xs">
+              {isSignedIn ? "No past battles yet." : "Sign in to view past battles."}
+            </div>
+          ) : (
+            groupedThreads.map((group) => (
+              <div key={group.label} className="space-y-1">
+                <div className="text-muted-foreground/60 px-2.5 pt-1 font-mono text-[10px] font-semibold tracking-wider uppercase">
+                  {group.label}
                 </div>
-                {isCurrentActive && <span className="bg-primary size-1.5 shrink-0 rounded-full" />}
-              </Link>
-            );
-          })}
+                <div className="space-y-0.5">
+                  {group.threads.map((thread) => {
+                    const isCurrentActive = pathname === `/t/${thread.id}`;
+                    return (
+                      <Link
+                        key={thread.id}
+                        href={`/t/${thread.id}`}
+                        className={`group flex w-full cursor-pointer items-center justify-between rounded-md px-2.5 py-2 text-left text-xs transition-colors ${
+                          isCurrentActive
+                            ? "bg-muted/90 text-foreground border-border/50 border font-medium"
+                            : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <MessageSquare className="group-hover:text-primary size-3.5 shrink-0 opacity-70" />
+                          <span className="truncate">{thread.title}</span>
+                        </div>
+                        {isCurrentActive && (
+                          <span className="bg-primary size-1.5 shrink-0 rounded-full" />
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

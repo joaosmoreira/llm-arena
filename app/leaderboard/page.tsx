@@ -3,8 +3,8 @@
 import * as React from "react";
 import { Trophy, Clock, Zap } from "lucide-react";
 import { AppShell } from "@/components/app-shell/app-shell";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "@/infrastructure/ui-kit/button";
+import { Progress } from "@/infrastructure/ui-kit/progress";
 
 interface LeaderboardEntry {
   rank: number;

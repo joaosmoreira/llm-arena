@@ -6,7 +6,8 @@ if (typeof window === "undefined") {
 }
 
 const serverEnvSchema = z.object({
-  OPENROUTER_API_KEY: z.string().min(1, "OPENROUTER_API_KEY is required"),
+  OPENROUTER_API_KEY_1: z.string().min(1).optional(),
+  OPENROUTER_API_KEY_2: z.string().min(1).optional(),
   DATABASE_URL: z
     .string()
     .min(1, "DATABASE_URL is required")
@@ -67,11 +68,20 @@ function validateEnv() {
 validateEnv();
 
 export const env = {
+  /** Primary OpenRouter key (OPROUTER1) */
+  get OPENROUTER_API_KEY_1(): string | undefined {
+    return process.env.OPENROUTER_API_KEY_1;
+  },
+  /** Secondary OpenRouter key (OPROUTER2) — fallback when OPROUTER1 hits daily limit */
+  get OPENROUTER_API_KEY_2(): string | undefined {
+    return process.env.OPENROUTER_API_KEY_2;
+  },
+  /** Returns the first available OpenRouter key; throws if none are configured */
   get OPENROUTER_API_KEY(): string {
-    const key = process.env.OPENROUTER_API_KEY;
+    const key = process.env.OPENROUTER_API_KEY_1 ?? process.env.OPENROUTER_API_KEY_2;
     if (!key) {
       throw new Error(
-        "Missing OPENROUTER_API_KEY environment variable. Please set it in your .env.local file."
+        "No OpenRouter API key configured. Set OPENROUTER_API_KEY_1 or OPENROUTER_API_KEY_2 in .env.local."
       );
     }
     return key;

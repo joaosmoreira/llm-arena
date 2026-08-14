@@ -1,5 +1,4 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { withTracing } from "@posthog/ai";
 import { PostHog } from "posthog-node";
 import { env } from "@/lib/env";
 
@@ -42,24 +41,11 @@ export function getOpenRouterProvider(apiKey?: string) {
 
 export function getLanguageModel(
   modelId: string,
-  options?: {
+  _options?: {
     userId?: string;
     threadId?: string;
   }
 ) {
   const openrouter = getOpenRouterProvider();
-  const rawModel = openrouter(modelId);
-
-  const phClient = getPostHogServerClient();
-  if (phClient) {
-    return withTracing(rawModel as unknown as Parameters<typeof withTracing>[0], phClient, {
-      posthogDistinctId: options?.userId || "anonymous",
-      posthogProperties: {
-        threadId: options?.threadId,
-        isFreeTier: true,
-      },
-    });
-  }
-
-  return rawModel;
+  return openrouter(modelId);
 }

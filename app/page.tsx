@@ -1,177 +1,202 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
+
+import { Swords, Zap, ShieldCheck, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell/app-shell";
-import { ResponseCard } from "@/components/arena/response-card";
 import { PromptDock, type SelectedModelChip } from "@/components/arena/prompt-dock";
-import { type OpenRouterModel } from "@/lib/ai/models";
-
-interface ModelTurnData {
-  id: string;
-  name: string;
-  letter: string;
-  fullName: string;
-  response: string;
-  ttftMs: number;
-  tokensPerSec: number;
-  totalTokens: number;
-  wins: number;
-  totalTurns: number;
-}
-
-const INITIAL_MODELS: ModelTurnData[] = [
-  {
-    id: "nvidia/nemotron-3.5-lightning:free",
-    name: "Nemotron 3.5",
-    letter: "N",
-    fullName: "nvidia/nemotron-3.5-lightning:free",
-    wins: 2,
-    totalTurns: 3,
-    ttftMs: 184,
-    tokensPerSec: 64,
-    totalTokens: 342,
-    response:
-      "Quantum superposition allows a subatomic particle to exist simultaneously in multiple potential states or locations until a measurement occurs. When observed, this cloud of probabilities instantly collapses into one definite outcome. This fundamental principle forms the computational engine behind quantum computers solving massive parallel problems.",
-  },
-  {
-    id: "qwen/qwen-2.5-72b-instruct:free",
-    name: "Qwen 2.5 72B",
-    letter: "Q",
-    fullName: "qwen/qwen-2.5-72b-instruct:free",
-    wins: 1,
-    totalTurns: 3,
-    ttftMs: 312,
-    tokensPerSec: 48,
-    totalTokens: 289,
-    response:
-      "In quantum physics, superposition means that a physical system can exist in a linear combination of several distinct states at once. Only when an interaction or observation happens does the system commit to a single observable reality. It is akin to a spinning coin that represents both heads and tails until it stops on the table.",
-  },
-  {
-    id: "meta-llama/llama-3.3-70b-instruct:free",
-    name: "Llama 3.3 70B",
-    letter: "L",
-    fullName: "meta-llama/llama-3.3-70b-instruct:free",
-    wins: 0,
-    totalTurns: 3,
-    ttftMs: 245,
-    tokensPerSec: 53,
-    totalTokens: 310,
-    response:
-      "Superposition describes how quantum particles hold multiple possible states concurrently rather than picking one beforehand. The act of measuring forces the particle to choose a single definite state according to probability. This unique trait enables quantum computers to evaluate vast numbers of paths simultaneously.",
-  },
-];
+import { Card, CardHeader, CardTitle, CardContent } from "@/infrastructure/ui-kit/card";
+import { Badge } from "@/infrastructure/ui-kit/badge";
+import {
+  type OpenRouterModel,
+  FALLBACK_FREE_MODELS,
+  getDefaultSelectedModels,
+} from "@/infrastructure/model-catalog";
 
 export default function ArenaHomePage() {
-  const [selectedWinner, setSelectedWinner] = React.useState<string | null>(
-    "nvidia/nemotron-3.5-lightning:free"
-  );
-  const [prompt, setPrompt] = React.useState(
-    "Explain the concept of quantum superposition in three simple sentences."
-  );
-  const [models, setModels] = React.useState<ModelTurnData[]>(INITIAL_MODELS);
+  const router = useRouter();
 
-  const selectedModelChips: SelectedModelChip[] = models.map((m) => ({
+  const [availableModels, setAvailableModels] =
+    React.useState<readonly OpenRouterModel[]>(FALLBACK_FREE_MODELS);
+  const [selectedModels, setSelectedModels] = React.useState<readonly OpenRouterModel[]>(() =>
+    getDefaultSelectedModels(FALLBACK_FREE_MODELS)
+  );
+  const [prompt, setPrompt] = React.useState("");
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
+
+  // Fetch live model catalog on mount
+  React.useEffect(() => {
+    fetch("/api/models")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.models) && data.models.length > 0) {
+          setAvailableModels(data.models);
+          setSelectedModels(getDefaultSelectedModels(data.models));
+        }
+      })
+      .catch(() => {
+        // Keeps fallback models
+      });
+  }, []);
+
+  const selectedModelChips: SelectedModelChip[] = selectedModels.map((m) => ({
     id: m.id,
     name: m.name,
     letter: m.letter,
   }));
 
-  const modelWinRecords = models.map((m) => ({
+  const modelWinRecords = selectedModels.map((m) => ({
     id: m.id,
     letter: m.letter,
     name: m.name,
-    wins: m.wins,
-    totalTurns: m.totalTurns,
-    isCurrentWinner: selectedWinner === m.id,
+    wins: 0,
+    totalTurns: 0,
   }));
-
-  const handleVote = (modelId: string) => {
-    setSelectedWinner((prev) => (prev === modelId ? null : modelId));
-  };
-
-  const handleRemoveModel = (modelId: string) => {
-    if (models.length > 1) {
-      setModels((prev) => prev.filter((m) => m.id !== modelId));
-    }
-  };
 
   const handleToggleModel = (model: OpenRouterModel) => {
-    setModels((prev) => {
+    setSelectedModels((prev) => {
       const exists = prev.some((m) => m.id === model.id);
       if (exists) {
         if (prev.length <= 1) return prev;
         return prev.filter((m) => m.id !== model.id);
       }
       if (prev.length >= 3) return prev;
-      return [
-        ...prev,
-        {
-          id: model.id,
-          name: model.name,
-          letter: model.letter,
-          fullName: model.id,
-          response: `Streaming response for ${model.name} will be connected in Feature 6. This model supports ${model.formattedContext} context window.`,
-          ttftMs: 200,
-          tokensPerSec: 50,
-          totalTokens: 250,
-          wins: 0,
-          totalTurns: 0,
-        },
-      ];
+      return [...prev, model];
     });
   };
 
-  const handleSubmit = () => {
-    void prompt;
+  const handleRemoveModel = (modelId: string) => {
+    if (selectedModels.length > 1) {
+      setSelectedModels((prev) => prev.filter((m) => m.id !== modelId));
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!prompt.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const res = await fetch("/api/threads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: prompt.trim(),
+          modelIds: selectedModels.map((m) => m.id),
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to create battle thread. Please try again.");
+      }
+
+      const { threadId } = await res.json();
+      router.push(`/t/${threadId}?stream=1`);
+    } catch (err: unknown) {
+      console.error("[Arena Submit Error]", err);
+      const errorMsg =
+        err instanceof Error ? err.message : "Failed to initialize battle. Please try again.";
+      setSubmitError(errorMsg);
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <AppShell
-      breadcrumb="Arena"
-      threadTitle="Quantum physics superposition intro"
-      modelRecords={modelWinRecords}
-    >
-      {/* Scrollable Conversation History */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6">
-          {/* User Prompt Message Bubble */}
-          <div className="flex justify-end">
-            <div className="bg-muted/80 border-border/50 text-foreground max-w-2xl rounded-2xl rounded-tr-sm border px-5 py-3.5 text-sm shadow-sm">
-              <p className="leading-relaxed font-normal">{prompt}</p>
+    <AppShell breadcrumb="Arena" threadTitle="New Battle" modelRecords={modelWinRecords}>
+      <div className="flex flex-1 flex-col overflow-y-auto p-4 md:p-6">
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center py-6">
+          {/* Hero Welcome Header */}
+          <div className="mb-8 text-center">
+            <div className="bg-primary/10 border-primary/20 text-primary mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl border shadow-sm">
+              <Swords className="size-6" />
             </div>
+            <h1 className="text-foreground text-2xl font-bold tracking-tight md:text-3xl">
+              3-Model Live Benchmark Arena
+            </h1>
+            <p className="text-muted-foreground mx-auto mt-2 max-w-xl text-xs leading-relaxed md:text-sm">
+              Send one prompt. Watch up to three AI models answer in parallel streams with real-time
+              speed and time-to-first-token metrics, then vote for the winner.
+            </p>
           </div>
 
-          {/* Model Answer Cards in Responsive Columns (1 to 3 models) */}
+          {submitError && (
+            <div className="border-destructive/40 bg-destructive/10 text-destructive mx-auto mb-6 max-w-2xl rounded-lg border p-3 text-center text-xs">
+              {submitError}
+            </div>
+          )}
+
+          {/* Selected Models Ready Cards */}
           <div
             className={`grid grid-cols-1 gap-4 ${
-              models.length === 1
-                ? "mx-auto w-full max-w-2xl md:grid-cols-1"
-                : models.length === 2
-                  ? "md:grid-cols-2"
-                  : "md:grid-cols-3"
+              selectedModels.length === 1
+                ? "mx-auto w-full max-w-md md:grid-cols-1"
+                : selectedModels.length === 2
+                  ? "mx-auto w-full max-w-3xl md:grid-cols-2"
+                  : "grid-cols-1 md:grid-cols-3"
             }`}
           >
-            {models.map((model) => (
-              <ResponseCard
+            {selectedModels.map((model) => (
+              <Card
                 key={model.id}
-                id={model.id}
-                name={model.name}
-                letter={model.letter}
-                fullName={model.fullName}
-                response={model.response}
-                ttftMs={model.ttftMs}
-                tokensPerSec={model.tokensPerSec}
-                totalTokens={model.totalTokens}
-                costUsd={0}
-                isWinner={selectedWinner === model.id}
-                onVote={handleVote}
-              />
+                className="border-border bg-card/60 hover:border-border/80 flex flex-col justify-between p-4 shadow-sm backdrop-blur-xs transition-all"
+              >
+                <div>
+                  <CardHeader className="p-0 pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="bg-muted text-foreground flex size-7 items-center justify-center rounded-full font-mono text-xs font-semibold">
+                        {model.letter}
+                      </div>
+                      <Badge variant="secondary" className="font-mono text-[10px]">
+                        {model.provider}
+                      </Badge>
+                    </div>
+                    <CardTitle className="text-foreground mt-2 truncate text-sm font-semibold">
+                      {model.name}
+                    </CardTitle>
+                    <p className="text-muted-foreground truncate font-mono text-[10px]">
+                      {model.id}
+                    </p>
+                  </CardHeader>
+
+                  <CardContent className="p-0 pt-2 text-xs">
+                    <p className="text-muted-foreground line-clamp-2 text-[11px] leading-relaxed">
+                      {model.description}
+                    </p>
+                  </CardContent>
+                </div>
+
+                <div className="border-border/40 mt-4 flex items-center justify-between border-t pt-2.5 font-mono text-[10px]">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Zap className="text-primary size-3" /> {model.formattedContext} context
+                  </span>
+                  <span className="text-winner flex items-center gap-1 font-semibold">
+                    <Sparkles className="size-3" /> Free Tier
+                  </span>
+                </div>
+              </Card>
             ))}
+          </div>
+
+          {/* Core Feature Highlights */}
+          <div className="border-border/40 bg-muted/20 text-muted-foreground mx-auto mt-8 flex flex-wrap items-center justify-center gap-6 rounded-xl border px-4 py-3 text-[11px]">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Zap className="text-primary size-3.5" /> Isolated Parallel Streams
+            </span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <ShieldCheck className="text-primary size-3.5" /> Arcjet Protected
+            </span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <Sparkles className="text-winner size-3.5" /> Honest Leaderboard Voting
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Floating Prompt Input Dock with Live Model Picker Popover */}
+      {/* Floating Prompt Input Dock */}
       <PromptDock
         prompt={prompt}
         onPromptChange={setPrompt}
@@ -179,6 +204,8 @@ export default function ArenaHomePage() {
         selectedModels={selectedModelChips}
         onToggleModel={handleToggleModel}
         onRemoveModel={handleRemoveModel}
+        availableModels={availableModels}
+        disabled={isSubmitting}
       />
     </AppShell>
   );

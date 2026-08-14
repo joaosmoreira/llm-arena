@@ -4,11 +4,13 @@ import {
   userSyncSchema,
   createThreadSchema,
   createTurnSchema,
+  initialModelResponseInputSchema,
   saveModelResponseSchema,
   castVoteSchema,
   type UserSyncInput,
   type CreateThreadInput,
   type CreateTurnInput,
+  type InitialModelResponseInput,
   type SaveModelResponseInput,
   type CastVoteInput,
 } from "./schema";
@@ -105,10 +107,10 @@ export async function getUserThreads(userId: string) {
  */
 export async function createTurnWithResponses(
   turnInput: CreateTurnInput,
-  responsesInput: readonly SaveModelResponseInput[]
+  responsesInput: readonly InitialModelResponseInput[]
 ) {
   const validatedTurn = createTurnSchema.parse(turnInput);
-  const validatedResponses = responsesInput.map((r) => saveModelResponseSchema.parse(r));
+  const validatedResponses = responsesInput.map((r) => initialModelResponseInputSchema.parse(r));
 
   return prisma.turn.create({
     data: {
@@ -120,18 +122,68 @@ export async function createTurnWithResponses(
           modelName: r.modelName,
           text: r.text,
           status: r.status,
-          timeToFirstTokenMs: r.timeToFirstTokenMs,
-          tokensPerSecond: r.tokensPerSecond,
-          inputTokens: r.inputTokens,
-          outputTokens: r.outputTokens,
-          totalTokens: r.totalTokens,
           costUsd: r.costUsd,
-          errorMessage: r.errorMessage,
         })),
       },
     },
     include: {
       responses: true,
+    },
+  });
+}
+
+/**
+ * Create a new turn in a thread
+ */
+export async function createTurn(input: CreateTurnInput) {
+  const validated = createTurnSchema.parse(input);
+  return prisma.turn.create({
+    data: {
+      threadId: validated.threadId,
+      prompt: validated.prompt,
+    },
+    include: {
+      responses: true,
+    },
+  });
+}
+
+/**
+ * Save or update a model response for a turn
+ */
+export async function saveModelResponse(input: SaveModelResponseInput) {
+  const validated = saveModelResponseSchema.parse(input);
+  return prisma.modelResponse.upsert({
+    where: {
+      turnId_modelId: {
+        turnId: validated.turnId,
+        modelId: validated.modelId,
+      },
+    },
+    update: {
+      text: validated.text,
+      status: validated.status,
+      timeToFirstTokenMs: validated.timeToFirstTokenMs,
+      tokensPerSecond: validated.tokensPerSecond,
+      inputTokens: validated.inputTokens,
+      outputTokens: validated.outputTokens,
+      totalTokens: validated.totalTokens,
+      costUsd: validated.costUsd,
+      errorMessage: validated.errorMessage,
+    },
+    create: {
+      turnId: validated.turnId,
+      modelId: validated.modelId,
+      modelName: validated.modelName,
+      text: validated.text,
+      status: validated.status,
+      timeToFirstTokenMs: validated.timeToFirstTokenMs,
+      tokensPerSecond: validated.tokensPerSecond,
+      inputTokens: validated.inputTokens,
+      outputTokens: validated.outputTokens,
+      totalTokens: validated.totalTokens,
+      costUsd: validated.costUsd,
+      errorMessage: validated.errorMessage,
     },
   });
 }

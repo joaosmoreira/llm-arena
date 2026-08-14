@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Send, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Send, X, Lock, LogIn } from "lucide-react";
+import { useUser, SignInButton } from "@clerk/nextjs";
+import { Button } from "@/infrastructure/ui-kit/button";
+import { Badge } from "@/infrastructure/ui-kit/badge";
 import { ModelPickerPopover } from "./model-picker-popover";
-import { type OpenRouterModel } from "@/lib/ai/models";
+import { type OpenRouterModel } from "@/infrastructure/model-catalog";
 
 export interface SelectedModelChip {
   id: string;
@@ -13,15 +14,16 @@ export interface SelectedModelChip {
   letter: string;
 }
 
-interface PromptDockProps {
+export interface PromptDockProps {
   prompt: string;
   onPromptChange: (value: string) => void;
   onSubmit: () => void;
   selectedModels: SelectedModelChip[];
   onToggleModel?: (model: OpenRouterModel) => void;
   onRemoveModel?: (id: string) => void;
-  availableModels?: OpenRouterModel[];
+  availableModels?: readonly OpenRouterModel[];
   disabled?: boolean;
+  isLocked?: boolean;
 }
 
 export function PromptDock({
@@ -33,11 +35,14 @@ export function PromptDock({
   onRemoveModel,
   availableModels,
   disabled = false,
+  isLocked = false,
 }: PromptDockProps) {
+  const { isSignedIn } = useUser();
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (prompt.trim()) {
+      if (isSignedIn && prompt.trim() && !disabled) {
         onSubmit();
       }
     }
@@ -62,7 +67,7 @@ export function PromptDock({
               >
                 <span className="text-primary font-bold">{model.letter}</span>
                 <span className="text-foreground font-sans">{model.name}</span>
-                {onRemoveModel && selectedModels.length > 1 && (
+                {!isLocked && onRemoveModel && selectedModels.length > 1 && (
                   <button
                     type="button"
                     onClick={() => onRemoveModel(model.id)}
@@ -74,6 +79,12 @@ export function PromptDock({
                 )}
               </Badge>
             ))}
+
+            {isLocked && (
+              <span className="text-muted-foreground/80 ml-auto flex items-center gap-1 font-mono text-[10px]">
+                <Lock className="size-3" /> Locked for this thread
+              </span>
+            )}
           </div>
         )}
 
@@ -83,14 +94,20 @@ export function PromptDock({
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything. Enter to send, shift + enter for a new line"
+          placeholder={
+            !isSignedIn
+              ? "Sign in to send a prompt and benchmark models..."
+              : isLocked
+                ? "Send a follow-up prompt to continue each model's conversation..."
+                : "Ask anything. Enter to send, shift + enter for a new line"
+          }
           disabled={disabled}
           className="text-foreground placeholder:text-muted-foreground w-full resize-none bg-transparent px-2 py-1 text-sm focus:outline-none disabled:opacity-50"
         />
 
         {/* Actions Bar */}
         <div className="border-border/50 flex items-center justify-between border-t pt-2.5">
-          {onToggleModel ? (
+          {!isLocked && onToggleModel ? (
             <ModelPickerPopover
               selectedModelIds={selectedModelIds}
               onToggleModel={onToggleModel}
@@ -102,16 +119,29 @@ export function PromptDock({
             <div />
           )}
 
-          <Button
-            type="button"
-            size="sm"
-            onClick={onSubmit}
-            disabled={disabled || !prompt.trim()}
-            className="h-8 cursor-pointer gap-1.5 px-3.5 text-xs font-semibold shadow-md disabled:opacity-50"
-          >
-            <span>Send Turn</span>
-            <Send className="size-3.5" />
-          </Button>
+          {!isSignedIn ? (
+            <SignInButton mode="modal">
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 cursor-pointer gap-1.5 px-3.5 text-xs font-semibold shadow-md"
+              >
+                <span>Sign in to send</span>
+                <LogIn className="size-3.5" />
+              </Button>
+            </SignInButton>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={onSubmit}
+              disabled={disabled || !prompt.trim()}
+              className="h-8 cursor-pointer gap-1.5 px-3.5 text-xs font-semibold shadow-md disabled:opacity-50"
+            >
+              <span>{isLocked ? "Send Follow-up" : "Send Turn"}</span>
+              <Send className="size-3.5" />
+            </Button>
+          )}
         </div>
       </div>
     </footer>

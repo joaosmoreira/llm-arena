@@ -1,9 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, Clock, Zap, Coins, ChevronDown, ChevronUp } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import {
+  Sparkles,
+  Clock,
+  Zap,
+  Coins,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  RotateCcw,
+  Loader2,
+} from "lucide-react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/infrastructure/ui-kit/card";
+import { Button } from "@/infrastructure/ui-kit/button";
+import { Skeleton } from "@/infrastructure/ui-kit/skeleton";
 
 export interface ModelResponseCardProps {
   id: string;
@@ -11,12 +22,16 @@ export interface ModelResponseCardProps {
   letter: string;
   fullName: string;
   response: string;
-  ttftMs: number;
-  tokensPerSec: number;
-  totalTokens: number;
+  status?: "IDLE" | "STREAMING" | "COMPLETED" | "FAILED";
+  ttftMs?: number | null;
+  tokensPerSec?: number | null;
+  totalTokens?: number;
   costUsd?: number;
-  isWinner: boolean;
-  onVote: (id: string) => void;
+  errorMessage?: string | null;
+  isWinner?: boolean;
+  canVote?: boolean;
+  onVote?: (id: string) => void;
+  onRetry?: (id: string) => void;
 }
 
 export function ResponseCard({
@@ -25,21 +40,31 @@ export function ResponseCard({
   letter,
   fullName,
   response,
-  ttftMs,
-  tokensPerSec,
-  totalTokens,
+  status = "COMPLETED",
+  ttftMs = null,
+  tokensPerSec = null,
+  totalTokens = 0,
   costUsd = 0,
-  isWinner,
+  errorMessage = null,
+  isWinner = false,
+  canVote = true,
   onVote,
+  onRetry,
 }: ModelResponseCardProps) {
   const [metricsOpen, setMetricsOpen] = React.useState(true);
+  const isFailed = status === "FAILED" || !!errorMessage;
+  const isStreaming = status === "STREAMING" && !errorMessage;
 
   return (
     <Card
       className={`flex flex-col transition-all duration-200 ${
         isWinner
-          ? "border-winner/60 ring-winner/40 bg-card shadow-lg ring-2"
-          : "border-border bg-card hover:border-border/80"
+          ? "border-winner/70 ring-winner/40 bg-card shadow-lg ring-2"
+          : isFailed
+            ? "border-destructive/50 bg-card/90"
+            : isStreaming
+              ? "border-primary/50 shadow-sm"
+              : "border-border bg-card hover:border-border/80"
       }`}
     >
       {/* Header: Initial Circle, Model Name, Model ID, and Winner Badge / Vote Button */}
@@ -47,7 +72,13 @@ export function ResponseCard({
         <div className="flex min-w-0 items-center gap-2.5">
           <div
             className={`flex size-7 shrink-0 items-center justify-center rounded-full font-mono text-xs font-semibold ${
-              isWinner ? "bg-winner text-winner-foreground shadow-sm" : "bg-muted text-foreground"
+              isWinner
+                ? "bg-winner text-winner-foreground shadow-sm"
+                : isFailed
+                  ? "bg-destructive/20 text-destructive"
+                  : isStreaming
+                    ? "bg-primary/20 text-primary animate-pulse"
+                    : "bg-muted text-foreground"
             }`}
           >
             {letter}
@@ -60,34 +91,71 @@ export function ResponseCard({
           </div>
         </div>
 
-        {/* Voting affordance */}
+        {/* Voting or State Affordance */}
         {isWinner ? (
           <Button
             variant="winner"
             size="sm"
             className="h-7 cursor-pointer gap-1 px-2.5 text-xs font-semibold shadow-sm"
-            onClick={() => onVote(id)}
-            title="Click to remove vote"
+            onClick={() => onVote?.(id)}
+            title="Winner"
           >
             <Sparkles className="size-3" /> Winner
           </Button>
-        ) : (
+        ) : isStreaming ? (
+          <div className="text-muted-foreground flex items-center gap-1.5 font-mono text-xs">
+            <Loader2 className="text-primary size-3.5 animate-spin" />
+            <span className="text-[11px]">Streaming...</span>
+          </div>
+        ) : isFailed ? (
+          onRetry ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-destructive/40 text-destructive hover:bg-destructive/10 h-7 cursor-pointer gap-1 px-2 text-xs"
+              onClick={() => onRetry(id)}
+            >
+              <RotateCcw className="size-3" /> Try again
+            </Button>
+          ) : null
+        ) : canVote && onVote ? (
           <Button
             variant="outline"
             size="sm"
-            className="border-border/80 hover:bg-primary hover:text-primary-foreground hover:border-primary h-7 cursor-pointer text-xs transition-colors"
+            className="border-border/80 hover:bg-primary hover:text-primary-foreground hover:border-primary h-7 cursor-pointer text-xs font-medium transition-colors"
             onClick={() => onVote(id)}
           >
-            Vote
+            Pick this
           </Button>
-        )}
+        ) : null}
       </CardHeader>
 
-      {/* Body: Formatted Response */}
+      {/* Body: Formatted Response or Error or Skeleton */}
       <CardContent className="flex flex-1 flex-col justify-between space-y-4 pt-4">
-        <p className="text-foreground/90 font-sans text-xs leading-relaxed whitespace-pre-wrap">
-          {response}
-        </p>
+        {isFailed ? (
+          <div className="border-destructive/30 bg-destructive/10 text-foreground space-y-2 rounded-lg border p-3 text-xs">
+            <div className="text-destructive flex items-center gap-1.5 font-semibold">
+              <AlertCircle className="size-4" />
+              <span>Model Encountered an Issue</span>
+            </div>
+            <p className="text-muted-foreground leading-relaxed">
+              {errorMessage || "Unable to reach this model. Please try again."}
+            </p>
+          </div>
+        ) : isStreaming && !response ? (
+          <div className="space-y-2 py-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-4/6" />
+          </div>
+        ) : (
+          <div className="text-foreground/90 font-sans text-xs leading-relaxed whitespace-pre-wrap">
+            {response}
+            {isStreaming && (
+              <span className="bg-primary ml-0.5 inline-block h-3.5 w-1 animate-pulse align-middle" />
+            )}
+          </div>
+        )}
 
         {/* Expandable Live Metrics Drawer */}
         <div className="border-border/60 bg-muted/30 space-y-2 rounded-md border p-2.5">
@@ -106,7 +174,11 @@ export function ResponseCard({
               Live Metrics
             </span>
             <span className="text-muted-foreground font-mono text-[10px]">
-              {totalTokens} tokens
+              {totalTokens > 0
+                ? `${totalTokens} tokens`
+                : isStreaming
+                  ? "measuring..."
+                  : "0 tokens"}
             </span>
           </button>
 
@@ -116,13 +188,19 @@ export function ResponseCard({
                 <div className="text-muted-foreground flex items-center gap-1 text-[10px]">
                   <Clock className="text-muted-foreground size-3" /> TTFT
                 </div>
-                <div className="text-foreground font-semibold">{ttftMs}ms</div>
+                <div className="text-foreground font-semibold">
+                  {ttftMs !== null && ttftMs !== undefined ? `${ttftMs}ms` : "—"}
+                </div>
               </div>
               <div>
                 <div className="text-muted-foreground flex items-center gap-1 text-[10px]">
                   <Zap className="text-muted-foreground size-3" /> Speed
                 </div>
-                <div className="text-foreground font-semibold">{tokensPerSec} tok/s</div>
+                <div className="text-foreground font-semibold">
+                  {tokensPerSec !== null && tokensPerSec !== undefined
+                    ? `${tokensPerSec} tok/s`
+                    : "—"}
+                </div>
               </div>
               <div>
                 <div className="text-muted-foreground flex items-center gap-1 text-[10px]">

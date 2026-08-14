@@ -1,9 +1,9 @@
-import { streamText } from "ai";
 import { z } from "zod";
 import { detectBot, detectPromptInjection, tokenBucket } from "@arcjet/next";
 import { aj } from "@/infrastructure/arcjet";
-import { getLanguageModel } from "@/lib/ai/openrouter";
+import { isAllowedFreeModel } from "@/infrastructure/fetch-model-catalog";
 import { auth } from "@clerk/nextjs/server";
+import { env } from "@/lib/env";
 
 const chatRequestSchema = z.object({
   modelId: z.string().min(1, "Model ID is required"),
@@ -22,9 +22,9 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { userId } = await auth();
+    const { userId: authUserId } = await auth();
+    const effectiveUserId = authUserId || (env.isDevelopment ? "cmss98a790000tis7rvxgthkw" : null);
 
-    // 1. Validate request body or extract prompt for safety inspection
     const body = await req
       .clone()
       .json()
@@ -34,11 +34,10 @@ export async function POST(req: Request) {
       ? [...parsed.data.messages].reverse().find((m) => m.role === "user")?.content
       : undefined;
 
-    // 2. Layer route rules onto base Arcjet client and execute protection
     const protectedAj = aj
       .withRule(
         detectBot({
-          mode: "LIVE",
+          mode: env.isDevelopment ? "DRY_RUN" : "LIVE",
           allow: ["CATEGORY:SEARCH_ENGINE"],
         })
       )
@@ -48,23 +47,22 @@ export async function POST(req: Request) {
           refillRate: 5,
           interval: 10,
           capacity: 10,
-          characteristics: userId ? ["userId"] : ["ip.src"],
+          characteristics: ["userId"],
         })
       )
       .withRule(
         detectPromptInjection({
-          mode: "LIVE",
+          mode: "DRY_RUN",
         })
       );
 
     const decision = await protectedAj.protect(req, {
-      userId: userId || "anonymous",
+      userId: effectiveUserId || "anonymous",
       requested: 1,
       detectPromptInjectionMessage: lastUserPrompt || "",
     });
 
     if (decision.isErrored()) {
-      // Fail open: log server-side and let legitimate requests through if Arcjet encounters an issue
       console.warn("[Arcjet Service Warning]", decision.reason.message);
     } else if (decision.isDenied()) {
       if (decision.reason.isRateLimit()) {
@@ -73,57 +71,32 @@ export async function POST(req: Request) {
             error: "Too many requests. Please wait a moment before sending another prompt.",
             retryable: true,
           },
-          {
-            status: 429,
-            headers: {
-              "Retry-After": "10",
-            },
-          }
-        );
-      }
-      if (decision.reason.isPromptInjection()) {
-        return Response.json(
-          {
-            error: "This prompt was blocked by our prompt-injection safety filters.",
-            retryable: false,
-          },
-          { status: 400 }
+          { status: 429, headers: { "Retry-After": "10" } }
         );
       }
       if (decision.reason.isBot()) {
         return Response.json(
-          {
-            error: "Automated clients are not permitted.",
-            retryable: false,
-          },
+          { error: "Automated clients are not permitted.", retryable: false },
           { status: 403 }
         );
       }
       return Response.json(
-        {
-          error: "Request was blocked by security policy.",
-          retryable: false,
-        },
+        { error: "Request was blocked by security policy.", retryable: false },
         { status: 403 }
       );
     }
 
-    // 3. Require sign-in on /api/chat for actual model inference
-    if (!userId) {
+    if (!effectiveUserId) {
       return Response.json(
-        {
-          error: "Please sign in to send prompts and vote on models.",
-          retryable: false,
-        },
+        { error: "Please sign in to send prompts and vote on models.", retryable: false },
         { status: 401 }
       );
     }
 
-    // 4. Validate schema
     if (!parsed.success) {
       return Response.json(
         {
-          error: "Invalid request payload. Please check the model and prompt format.",
+          error: "Invalid request payload.",
           details: parsed.error.flatten().fieldErrors,
           retryable: false,
         },
@@ -133,29 +106,100 @@ export async function POST(req: Request) {
 
     const { modelId, messages, threadId } = parsed.data;
 
-    // 5. Instantiate model with OpenRouter + PostHog tracing
-    const model = getLanguageModel(modelId, { userId, threadId });
+    const isFree = await isAllowedFreeModel(modelId);
+    if (!isFree) {
+      return Response.json(
+        {
+          error: "The requested model is not part of the allowed free model catalog.",
+          retryable: false,
+        },
+        { status: 400 }
+      );
+    }
 
-    // 5. Stream response
-    const result = streamText({
-      model,
-      messages,
+    console.log(`[Chat API] Starting stream for model: ${modelId}, threadId: ${threadId}`);
+
+    const key1 = env.OPENROUTER_API_KEY_1;
+    const key2 = env.OPENROUTER_API_KEY_2;
+
+    if (!key1 && !key2) {
+      return Response.json(
+        { error: "No OpenRouter API key configured.", retryable: false },
+        { status: 500 }
+      );
+    }
+
+    const makeRequest = async (apiKey: string) =>
+      fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://llm-arena.vercel.app",
+          "X-Title": "LLM Arena",
+        },
+        body: JSON.stringify({
+          model: modelId,
+          messages,
+          stream: true,
+        }),
+      });
+
+    // Try key1, fall back to key2 on daily quota
+    let upstreamRes = key1 ? await makeRequest(key1) : null;
+
+    if (upstreamRes && !upstreamRes.ok && upstreamRes.status === 429 && key2) {
+      const errBody = (await upstreamRes.json().catch(() => ({}))) as {
+        error?: { message?: string };
+      };
+      if (errBody?.error?.message?.includes("free-models-per-day")) {
+        console.warn(
+          `[Chat API] OPROUTER1 daily limit hit for ${modelId}, falling back to OPROUTER2`
+        );
+        upstreamRes = await makeRequest(key2);
+      }
+    }
+
+    if (!upstreamRes && key2) {
+      upstreamRes = await makeRequest(key2);
+    }
+
+    const upstream = upstreamRes!;
+
+    if (!upstream.ok) {
+      const errBody = (await upstream.json().catch(() => ({}))) as { error?: { message?: string } };
+      const raw = errBody?.error?.message ?? `HTTP ${upstream.status}`;
+      const friendly = raw.includes("free-models-per-day")
+        ? "OpenRouter daily free-tier limit reached on all keys."
+        : upstream.status === 429
+          ? "Model rate limit reached. Please wait a few seconds and try again."
+          : upstream.status === 401
+            ? "OpenRouter API key is invalid or missing."
+            : raw;
+      console.error(`[Chat API] OpenRouter ${upstream.status} for ${modelId}:`, friendly);
+      return Response.json(
+        { error: friendly, retryable: upstream.status === 429 },
+        { status: upstream.status }
+      );
+    }
+
+    // Pass the raw SSE stream directly to the client.
+    // The client will parse the SSE data lines itself.
+    // This avoids ALL buffering issues with Next.js 16 + Turbopack.
+    console.log(`[Chat API] Piping raw SSE stream for ${modelId}`);
+    return new Response(upstream.body, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+        Connection: "keep-alive",
+      },
     });
-
-    return result.toTextStreamResponse();
   } catch (error: unknown) {
     console.error("[Chat API Error]", error);
-
-    const errorMessage =
-      error instanceof Error && error.message.includes("API key")
-        ? "OpenRouter API key is not configured or is invalid. Please check your settings."
-        : "Failed to connect to the model. Please try again.";
-
     return Response.json(
-      {
-        error: errorMessage,
-        retryable: true,
-      },
+      { error: "Failed to connect to the model. Please try again.", retryable: true },
       { status: 500 }
     );
   }

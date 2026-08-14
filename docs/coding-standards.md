@@ -6,13 +6,19 @@ This document defines the engineering standards, architectural conventions, desi
 
 ## 1. Core Architecture & Paradigms
 
-- **Feature-Centric Structure**: Organize code by feature and domain rather than arbitrary horizontal layers. Domain logic, UI components, and helper utilities belonging to a specific capability stay grouped together.
+- **Feature-Centric Structure & Boundaries**:
+  - Organize domain code by feature. One feature must never import another feature's private files.
+  - Domain-agnostic primitives (shadcn UI kit) land in `infrastructure/ui-kit/`, which is where `components.json` points. Primitives own no domain and are shared across everything.
+- **Pure Rules vs. Network Call Split**:
+  - When a module needs both pure domain rules and I/O (network requests), split it in two:
+    - `infrastructure/<module>.ts`: pure types, limits, schemas, parsing, and formatting with no I/O (safe for client bundle).
+    - `infrastructure/fetch-<module>.ts`: `server-only` module that performs the actual network fetching/I/O.
 - **Pure Functions & Immutability**:
   - Prefer pure, deterministic functions without shared mutable state.
   - Declare variables with `const` and immutable structures (`readonly`, `ReadonlyArray`).
   - Use functional array methods (`map`, `filter`, `reduce`, `flatMap`) over mutating loops.
   - Push all side-effects (database queries, network requests, storage access) to the outer edges (Next.js route handlers, server actions, or explicit provider layers).
-- **Singletons for Infrastructure**: Core clients (Prisma ORM, Arcjet security guard, PostHog telemetry, OpenRouter AI SDK provider) are initialized as singletons in `lib/` to prevent duplicate connection pools and memory leaks in serverless/hot-reload environments.
+- **Singletons for Infrastructure**: Core clients (Prisma ORM, Arcjet security guard, PostHog telemetry, OpenRouter AI SDK provider) are initialized as singletons in `lib/` or `infrastructure/` to prevent duplicate connection pools and memory leaks in serverless/hot-reload environments.
 
 ---
 

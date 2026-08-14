@@ -23,7 +23,7 @@ There are rough hand-drawn sketches for the arena screen, the leaderboard, and t
 | 3   | Data model                                  | Foundation | done        |
 | 4   | Design & look                               | Foundation | done        |
 | 5   | Model picker                                | Slice 1    | done        |
-| 6   | Send a prompt, parallel streams, and voting | Slice 1    | not started |
+| 6   | Send a prompt, parallel streams, and voting | Slice 1    | done        |
 | 7   | App shell & thread history                  | Slice 2    | not started |
 | 8   | Public thread visibility & sharing          | Slice 3    | not started |
 | 9   | Leaderboard: global & personal              | Slice 4    | not started |
@@ -133,20 +133,24 @@ A coffee or dark brown background, warm, not neutral gray or true black. One acc
 An "Add model" popover pulling OpenRouter's live free-tier list, sorted by context window, capped at three models, defaulting to all three selected, with removable chips next to the prompt box. Also render that same catalog as a simple `/models` page, name, context window, and pricing for each one, so anyone can browse the full list without opening the picker.
 
 - [x] Decide the approach
-- [x] Fetch live OpenRouter free-tier models sorted by context window (`lib/ai/models.ts`)
-- [x] Build cached `/api/models` endpoint for client components (`app/api/models/route.ts`)
+- [x] Fetch live OpenRouter free-tier catalog with row-by-row Zod parsing in `infrastructure/model-catalog.ts`
+- [x] Implement provider-diverse default trio selector (highest context per distinct provider)
+- [x] Add `/api/chat` security guard verifying `modelId` belongs to free catalog before inference
+- [x] Build cached `/api/models` endpoint with 1-hour ISR cache (`app/api/models/route.ts`)
 - [x] Implement accessible Radix `Popover` primitive (`components/ui/popover.tsx`)
-- [x] Build `ModelPickerPopover` with search, context length indicators, and 1-3 model caps (`components/arena/model-picker-popover.tsx`)
+- [x] Build `ModelPickerPopover` with search, context length formatting (`1M`, `262K`), and 1-3 model caps (`components/arena/model-picker-popover.tsx`)
 - [x] Integrate model picker and removable model chips into `PromptDock` (`components/arena/prompt-dock.tsx`)
 - [x] Build live `/models` server-rendered catalog page (`app/models/page.tsx`)
 - [x] Verify typechecking, formatting, linting, and production build (`tsc`, `eslint`, `next build`)
 
 #### Spec: Model Picker & Models Page
 
-- **Data Source**: OpenRouter live API (`https://openrouter.ai/api/v1/models`), filtering `:free` and `$0.00` models, sorted by `context_length` descending with resilient curated fallback (`lib/ai/models.ts`).
-- **Picker Behavior**: Radix popover anchored to `+ Add Model` trigger in prompt dock. Allows searching by model name or provider, displays context size badges, and enforces min 1 and max 3 selected models.
+- **Catalog Infrastructure**: Live fetch in `infrastructure/model-catalog.ts` querying `https://openrouter.ai/api/v1/models` (public endpoint, no key). Zod-parsed per row (bad rows dropped without emptying catalog), filtered for `:free` and `$0.00` pricing, sorted by `context_length` descending, and cached at 1 hour (`revalidate: 3600`).
+- **Default Trio**: Highest-context model per distinct provider (e.g. Nemotron 3 Ultra [NVIDIA, 1M], Ling-3.0-flash [inclusionAI, 262K], Poolside Laguna S 2.1 [Poolside, 262K]). 100% dynamic without hardcoding.
+- **Picker UI**: Radix popover anchored to `+ Add Model` trigger in prompt dock. Shows full list without artificial filtering, formatted context (`1M`, `262K`), cap at 3 models / floor at 1 model, with disabled state explaining itself.
 - **Model Chips**: Active models displayed as removable tags above the textarea in the prompt dock.
-- **Catalog Page**: Dedicated `/models` page displaying full model cards, context window, $0.00 pricing, and provider info.
+- **Catalog Page**: Dedicated server-rendered `/models` page displaying full model cards, context window, $0.00 pricing, and provider info.
+- **Ingress Security**: `/api/chat` validates `modelId` against `isAllowedFreeModel()` to prevent paid model usage against our server API key.
 
 ### 6. Send a prompt, parallel streams, and voting
 
@@ -156,8 +160,31 @@ Arcjet sits in front of this endpoint before any model is ever called: rate limi
 
 Every prompt sent, every answer finishing, and every vote cast should be tracked as a real PostHog event, so there's an honest funnel from prompt to answer to vote. A model failing should also be logged properly on the server, not just shown to the user and forgotten. Separately from that funnel, every actual model call should also be wrapped so PostHog captures its own real tokens, cost, and latency per call, that's PostHog's own LLM analytics, not the same thing as the funnel events or the numbers already shown on the response card.
 
-- [ ] Decide the approach
-- [ ] Build it
+- [x] Decide the approach
+- [x] Build `/api/threads` route handler (create thread + turn in Postgres from first prompt)
+- [x] Build `/api/turns` route handler (create follow-up turn in an existing thread)
+- [x] Build `/api/responses` route handler (persist/update completed model response metrics)
+- [x] Build `/api/vote` route handler (authenticated vote casting with 2+ response verification)
+- [x] Create `useArenaBattle` orchestrator hook for independent parallel streaming, live TTFT/speed math, and error handling
+- [x] Update `PromptDock` with locked models in active threads and streaming disabled states
+- [x] Update `ResponseCard` with streaming indicators, retry affordance on error, and live metrics drawer
+- [x] Wire `/` (empty state) and `/t/[id]` (active thread) to live streaming, follow-ups, and voting
+- [x] Wire PostHog client funnel tracking (`prompt_sent`, `model_stream_completed`, `model_stream_failed`, `vote_cast`)
+- [x] Verify typecheck, lint, and build pass cleanly
+
+#### Spec: Send Prompt, Parallel Streams, & Voting
+
+- **Thread Initialization Sequence**: When sending a prompt from an empty arena (no active thread), the client first creates the `Thread` and `Turn` on the server, navigates to `/t/[threadId]`, and then initiates the parallel model streams. For follow-ups within an existing thread, the turn is created directly under the current thread.
+- **Parallel Streams**: 1–3 independent HTTP requests to `/api/chat` using isolated `AbortController`s. Failures or rate limits on one model never affect sister streams.
+- **Metrics Calculation**:
+  - Time-to-First-Token (TTFT): ms from stream dispatch to first chunk received.
+  - Speed (tokens/sec): calculated as `outputTokens / (finishTime - requestStartTime)`.
+  - Total tokens: recorded per completed model response.
+- **Multi-Turn Isolation & Model Locking**: Models selected on turn one are locked for the lifetime of the thread. Follow-up prompts in an active thread use the same models (the model picker becomes read-only/hidden), and each model continues its own separate conversation history (`[User -> Model A -> User -> Model A]`). To test different models, a user starts a new arena battle.
+- **Voting Enforcement**: Voting is only permitted when 2 or more models have completed responses in that turn. Exactly 1 vote per turn written to PostgreSQL with race-condition safety. Winner is badged in emerald green.
+- **Observability & Funnel**: PostHog tracks funnel events (`prompt_sent`, `model_stream_completed`, `model_stream_failed`, `vote_cast`) plus server-side LLM call tracing via `@posthog/ai` (`NEXT_PUBLIC_POSTHOG_KEY` and `NEXT_PUBLIC_POSTHOG_HOST` configured for server and client capture).
+- **Security & Error Masking**: Ingress protected by Arcjet (token bucket keyed by Clerk `userId`, bot detection, prompt injection shield). Human-readable, non-technical error cards with retry actions.
+- **UI State Machine**: Composer automatically swaps to a "Sign in to send" button when signed out; failed models expose "Try again" column recovery; once 2+ columns complete, "Pick this" appears; after voting, only the emerald winner badge displays.
 
 ## Slice 2: App shell & thread history
 

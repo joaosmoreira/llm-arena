@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { PanelLeftClose, PanelLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/infrastructure/ui-kit/button";
+import { Badge } from "@/infrastructure/ui-kit/badge";
 
 export interface ModelWinRecord {
   id: string;

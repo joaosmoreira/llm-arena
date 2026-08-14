@@ -2,15 +2,15 @@
 
 import * as React from "react";
 import { Plus, Search, Check, Cpu, AlertCircle, Loader2 } from "lucide-react";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { type OpenRouterModel, FALLBACK_FREE_MODELS } from "@/lib/ai/models";
+import { Popover, PopoverTrigger, PopoverContent } from "@/infrastructure/ui-kit/popover";
+import { Button } from "@/infrastructure/ui-kit/button";
+import { Badge } from "@/infrastructure/ui-kit/badge";
+import { type OpenRouterModel, FALLBACK_FREE_MODELS } from "@/infrastructure/model-catalog";
 
 interface ModelPickerPopoverProps {
   selectedModelIds: string[];
   onToggleModel: (model: OpenRouterModel) => void;
-  availableModels?: OpenRouterModel[];
+  availableModels?: readonly OpenRouterModel[];
   maxModels?: number;
   minModels?: number;
 }
@@ -24,7 +24,7 @@ export function ModelPickerPopover({
 }: ModelPickerPopoverProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
-  const [models, setModels] = React.useState<OpenRouterModel[]>(
+  const [models, setModels] = React.useState<readonly OpenRouterModel[]>(
     initialModels && initialModels.length > 0 ? initialModels : FALLBACK_FREE_MODELS
   );
   const [loading, setLoading] = React.useState(false);

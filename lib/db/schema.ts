@@ -23,6 +23,15 @@ export const createTurnSchema = z.object({
 });
 export type CreateTurnInput = z.infer<typeof createTurnSchema>;
 
+export const initialModelResponseInputSchema = z.object({
+  modelId: z.string().min(1, "Model ID is required"),
+  modelName: z.string().min(1, "Model Name is required"),
+  text: z.string().default(""),
+  status: responseStatusSchema.default("STREAMING"),
+  costUsd: z.number().nonnegative().optional().default(0.0),
+});
+export type InitialModelResponseInput = z.infer<typeof initialModelResponseInputSchema>;
+
 export const saveModelResponseSchema = z.object({
   turnId: z.string().min(1, "Turn ID is required"),
   modelId: z.string().min(1, "Model ID is required"),

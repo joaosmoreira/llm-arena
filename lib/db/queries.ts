@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/app/generated/prisma/client";
 import {
   userSyncSchema,
   createThreadSchema,
@@ -135,11 +136,23 @@ export async function createTurnWithResponses(
   });
 }
 
+export type CastVoteResult =
+  | {
+      readonly ok: true;
+      readonly vote: Awaited<ReturnType<typeof prisma.vote.create>>;
+    }
+  | {
+      readonly ok: false;
+      readonly refusal:
+        "already-voted" | "turn-not-found" | "not-enough-responses" | "invalid-response";
+    };
+
 /**
- * Record a vote for a specific turn.
- * Enforces rule: voting is only allowed when 2+ models answered.
+ * Record a vote for a specific turn with race-condition safety.
+ * Enforces rule: voting is only allowed when 2+ models answered,
+ * and catches P2002 unique constraint violations on turnId gracefully.
  */
-export async function recordVote(input: CastVoteInput) {
+export async function castVote(input: CastVoteInput): Promise<CastVoteResult> {
   const validated = castVoteSchema.parse(input);
 
   // Verify turn has at least 2 completed responses
@@ -149,35 +162,46 @@ export async function recordVote(input: CastVoteInput) {
   });
 
   if (!turn) {
-    throw new Error("Turn not found.");
+    return { ok: false, refusal: "turn-not-found" };
   }
 
   if (turn.vote) {
-    throw new Error("A vote has already been cast for this turn.");
+    return { ok: false, refusal: "already-voted" };
   }
 
   const completedResponses = turn.responses.filter((r) => r.status === "COMPLETED");
   if (completedResponses.length < 2) {
-    throw new Error("A vote requires at least two completed model responses.");
+    return { ok: false, refusal: "not-enough-responses" };
   }
 
   // Ensure the voted response belongs to this turn
   const winningResponse = turn.responses.find((r) => r.id === validated.modelResponseId);
   if (!winningResponse) {
-    throw new Error("The selected response does not belong to this turn.");
+    return { ok: false, refusal: "invalid-response" };
   }
 
-  return prisma.vote.create({
-    data: {
-      turnId: validated.turnId,
-      userId: validated.userId,
-      modelResponseId: validated.modelResponseId,
-    },
-    include: {
-      modelResponse: true,
-    },
-  });
+  try {
+    const vote = await prisma.vote.create({
+      data: {
+        turnId: validated.turnId,
+        userId: validated.userId,
+        modelResponseId: validated.modelResponseId,
+      },
+      include: {
+        modelResponse: true,
+      },
+    });
+    return { ok: true, vote };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      // Caught the race condition where another concurrent request wrote the vote first
+      return { ok: false, refusal: "already-voted" };
+    }
+    throw error;
+  }
 }
+
+export const recordVote = castVote;
 
 export interface ModelLeaderboardStats {
   readonly modelId: string;

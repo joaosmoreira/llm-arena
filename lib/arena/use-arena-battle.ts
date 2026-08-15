@@ -662,6 +662,21 @@ export function useArenaBattle({
       } catch (error: unknown) {
         if (controller.signal.aborted) return;
         const errorMsg = sanitizeErrorMessage(error);
+
+        // Persist failed retry response state to DB
+        await fetch("/api/responses", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            turnId,
+            modelId: model.id,
+            modelName: model.name,
+            text: accumulatedText || "",
+            status: "FAILED",
+            errorMessage: errorMsg,
+          }),
+        }).catch(() => null);
+
         setActiveStreams((prev) => ({
           ...prev,
           [modelId]: {

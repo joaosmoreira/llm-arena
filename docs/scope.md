@@ -46,7 +46,7 @@ PostHog should be wired in from the start too, session replay and heatmaps turne
 - [x] Setup Arcjet security guard with token bucket rate limiting, bot protection, and attack shield (`lib/arcjet.ts`)
 - [x] Configure OpenRouter AI SDK provider and PostHog server tracing wrapper (`lib/ai/openrouter.ts`)
 - [x] Setup PostHog client provider with Clerk authentication sync and session replay (`providers/posthog-provider.tsx`)
-- [x] Create Next.js proxy middleware for Clerk auth routing (`proxy.ts`)
+- [x] Create Next.js middleware for Clerk auth routing (`middleware.ts`)
 - [x] Implement `/api/chat` route with Arcjet protection, isolated streaming, and human error formatting (`app/api/chat/route.ts`)
 - [x] Typecheck, lint, production build all clean (`tsc`, `eslint`, `next build` passing with 0 errors)
 - [x] Apply the first Prisma migration against the real database (`pooled.db.prisma.io:5432`)

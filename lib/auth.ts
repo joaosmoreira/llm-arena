@@ -11,6 +11,10 @@ export const DEV_USER_ID = "cmss98a790000tis7rvxgthkw";
  * Returns null if unauthenticated in production.
  */
 export async function getEffectiveUserId(): Promise<string | null> {
-  const { userId } = await auth();
-  return userId || (env.isDevelopment ? DEV_USER_ID : null);
+  try {
+    const { userId } = await auth();
+    return userId || (env.isDevelopment ? DEV_USER_ID : null);
+  } catch {
+    return env.isDevelopment ? DEV_USER_ID : null;
+  }
 }

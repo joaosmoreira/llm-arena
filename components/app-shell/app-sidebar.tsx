@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton, SignInButton, useUser } from "@clerk/nextjs";
-import { Trophy, LayoutDashboard, Award, Layers, Plus, MessageSquare } from "lucide-react";
+import { Trophy, LayoutDashboard, Award, Layers, Plus } from "lucide-react";
 import { ThemeToggle } from "@/infrastructure/ui-kit/theme-toggle";
 import { Button } from "@/infrastructure/ui-kit/button";
 
@@ -135,75 +135,75 @@ export function AppSidebar({ isOpen, onCloseMobile }: AppSidebarProps) {
         <Link
           href="/"
           onClick={handleLinkClick}
-          className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+          className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors ${
             pathname === "/"
               ? "bg-primary/10 text-primary font-semibold"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
           }`}
         >
-          <LayoutDashboard className="size-4" />
+          <LayoutDashboard className="size-4 shrink-0" />
           Arena
         </Link>
         <Link
           href="/leaderboard"
           onClick={handleLinkClick}
-          className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+          className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors ${
             pathname === "/leaderboard"
               ? "bg-primary/10 text-primary font-semibold"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
           }`}
         >
-          <Award className="size-4" />
+          <Award className="size-4 shrink-0" />
           Leaderboard
         </Link>
         <Link
           href="/models"
           onClick={handleLinkClick}
-          className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+          className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors ${
             pathname === "/models"
               ? "bg-primary/10 text-primary font-semibold"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
           }`}
         >
-          <Layers className="size-4" />
+          <Layers className="size-4 shrink-0" />
           Models
         </Link>
       </nav>
 
       {/* Thread History Section */}
-      <div className="mt-5 flex flex-1 flex-col overflow-hidden px-3">
+      <div className="mt-6 flex flex-1 flex-col overflow-hidden px-3">
         <div className="text-muted-foreground flex items-center justify-between px-2 pb-2 text-[11px] font-semibold tracking-wider uppercase">
-          <span>Past Battles</span>
+          <span>YOUR THREADS</span>
           <Link
             href="/"
             onClick={handleLinkClick}
-            className="text-primary hover:text-primary/80 flex cursor-pointer items-center gap-1 text-[11px] font-medium transition-colors"
+            className="text-primary hover:text-primary/80 flex cursor-pointer items-center gap-1 text-[11px] font-semibold transition-colors"
           >
-            <Plus className="size-3" /> New Battle
+            <Plus className="size-3.5" /> New
           </Link>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto pr-1">
           {isLoading ? (
             <div className="space-y-2 px-2 py-3">
-              <div className="bg-muted/40 h-7 w-full animate-pulse rounded-md" />
-              <div className="bg-muted/30 h-7 w-3/4 animate-pulse rounded-md" />
-              <div className="bg-muted/20 h-7 w-5/6 animate-pulse rounded-md" />
+              <div className="bg-muted/40 h-8 w-full animate-pulse rounded-md" />
+              <div className="bg-muted/30 h-8 w-3/4 animate-pulse rounded-md" />
+              <div className="bg-muted/20 h-8 w-5/6 animate-pulse rounded-md" />
             </div>
           ) : displayedThreads.length === 0 ? (
             <div className="text-muted-foreground/70 border-border/40 bg-muted/20 my-2 rounded-lg border border-dashed px-3 py-6 text-center text-xs leading-relaxed">
               {isSignedIn ? (
                 <>
-                  <p className="text-foreground font-medium">No past battles yet.</p>
-                  <p className="text-muted-foreground mt-1 text-[11px]">
-                    Send your first prompt in the Arena to start benchmarking!
+                  <p className="text-foreground font-medium">No threads yet.</p>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Send a prompt in the Arena to start benchmarking!
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-foreground font-medium">Sign in to save battles</p>
-                  <p className="text-muted-foreground mt-1 text-[11px]">
-                    Your multi-model threads and votes will be preserved across visits.
+                  <p className="text-foreground font-medium">Sign in to save threads</p>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Your threads and votes will be saved across visits.
                   </p>
                 </>
               )}
@@ -211,7 +211,7 @@ export function AppSidebar({ isOpen, onCloseMobile }: AppSidebarProps) {
           ) : (
             groupedThreads.map((group) => (
               <div key={group.label} className="space-y-1">
-                <div className="text-muted-foreground/70 px-2.5 pt-1 font-mono text-[10px] font-semibold tracking-wider uppercase">
+                <div className="text-muted-foreground/80 px-2 pt-2 text-[11px] font-semibold tracking-wider uppercase">
                   {group.label}
                 </div>
                 <div className="space-y-0.5">
@@ -224,19 +224,16 @@ export function AppSidebar({ isOpen, onCloseMobile }: AppSidebarProps) {
                         key={thread.id}
                         href={`/t/${thread.id}`}
                         onClick={handleLinkClick}
-                        className={`group flex w-full cursor-pointer items-center justify-between rounded-md px-2.5 py-2 text-left text-xs transition-colors ${
+                        className={`group flex w-full cursor-pointer items-center justify-between px-2.5 py-2 text-left text-[13px] transition-colors ${
                           isCurrentActive
-                            ? "border-border/60 bg-muted text-foreground border font-medium shadow-2xs"
-                            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            ? "border-primary bg-muted/90 text-foreground rounded-r-md border-l-2 font-medium shadow-2xs"
+                            : "text-muted-foreground hover:bg-muted/40 hover:text-foreground rounded-md font-normal"
                         }`}
                       >
-                        <div className="flex min-w-0 items-center gap-2">
-                          <MessageSquare className="group-hover:text-primary size-3.5 shrink-0 opacity-70 transition-colors" />
-                          <span className="truncate">{thread.title}</span>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5 pl-2 font-mono text-[10px]">
+                        <span className="truncate pr-2">{thread.title}</span>
+                        <div className="flex shrink-0 items-center gap-1.5 font-mono text-[11px]">
                           {turnCount > 1 && (
-                            <span className="text-muted-foreground/60 bg-muted/60 py-0.2 rounded px-1">
+                            <span className="text-muted-foreground/60 bg-muted/60 rounded px-1.5 py-0.5 text-[10px]">
                               {turnCount}t
                             </span>
                           )}

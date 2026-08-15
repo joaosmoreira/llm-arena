@@ -302,19 +302,15 @@ export function useArenaBattle({
               throw new Error(errorMsg || "Model stream encountered an error.");
             }
 
-            const currentTokens = estimateTokens(accumulatedText);
-            const elapsedSec = Math.max(0.1, (performance.now() - startTime) / 1000);
-            const speed = Math.round((currentTokens / elapsedSec) * 10) / 10;
-
             setActiveStreams((prev) => ({
               ...prev,
               [model.id]: {
                 ...prev[model.id],
                 text: accumulatedText,
                 status: "STREAMING",
-                ttftMs: firstTokenTime,
-                tokensPerSec: speed,
-                totalTokens: currentTokens,
+                ttftMs: null,
+                tokensPerSec: null,
+                totalTokens: 0,
               },
             }));
           }
@@ -579,19 +575,15 @@ export function useArenaBattle({
             firstTokenTime = Math.round(performance.now() - startTime);
           }
 
-          const currentTokens = estimateTokens(accumulatedText);
-          const elapsedSec = Math.max(0.1, (performance.now() - startTime) / 1000);
-          const speed = Math.round((currentTokens / elapsedSec) * 10) / 10;
-
           setActiveStreams((prev) => ({
             ...prev,
             [modelId]: {
               ...prev[modelId],
               text: accumulatedText,
               status: "STREAMING",
-              ttftMs: firstTokenTime,
-              tokensPerSec: speed,
-              totalTokens: currentTokens,
+              ttftMs: null,
+              tokensPerSec: null,
+              totalTokens: 0,
             },
           }));
         }

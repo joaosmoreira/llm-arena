@@ -172,22 +172,32 @@ export function ResponseCard({
               Live Metrics
             </span>
             <span className="text-muted-foreground font-mono text-[10px]">
-              {totalTokens > 0
-                ? `${totalTokens} tokens`
-                : isStreaming
-                  ? "measuring..."
-                  : "0 tokens"}
+              {isStreaming ? (
+                <span className="text-muted-foreground/70 animate-pulse">measuring...</span>
+              ) : totalTokens > 0 ? (
+                `${totalTokens} tokens`
+              ) : (
+                "0 tokens"
+              )}
             </span>
           </button>
 
           {metricsOpen && (
-            <div className="border-border/30 grid grid-cols-3 gap-2 border-t pt-1 font-mono text-[11px]">
+            <div className="border-border/30 grid grid-cols-3 gap-2 border-t pt-1.5 font-mono text-[11px]">
               <div>
                 <div className="text-muted-foreground flex items-center gap-1 text-[10px]">
                   <Clock className="text-muted-foreground size-3" /> TTFT
                 </div>
                 <div className="text-foreground font-semibold">
-                  {ttftMs !== null && ttftMs !== undefined ? `${ttftMs}ms` : "—"}
+                  {isStreaming ? (
+                    <span className="text-muted-foreground/60 animate-pulse text-[10px]">
+                      measuring...
+                    </span>
+                  ) : ttftMs !== null && ttftMs !== undefined ? (
+                    `${ttftMs}ms`
+                  ) : (
+                    "—"
+                  )}
                 </div>
               </div>
               <div>
@@ -195,16 +205,30 @@ export function ResponseCard({
                   <Zap className="text-muted-foreground size-3" /> Speed
                 </div>
                 <div className="text-foreground font-semibold">
-                  {tokensPerSec !== null && tokensPerSec !== undefined
-                    ? `${tokensPerSec} tok/s`
-                    : "—"}
+                  {isStreaming ? (
+                    <span className="text-muted-foreground/60 animate-pulse text-[10px]">
+                      measuring...
+                    </span>
+                  ) : tokensPerSec !== null && tokensPerSec !== undefined ? (
+                    `${tokensPerSec} tok/s`
+                  ) : (
+                    "—"
+                  )}
                 </div>
               </div>
               <div>
                 <div className="text-muted-foreground flex items-center gap-1 text-[10px]">
                   <Coins className="text-muted-foreground size-3" /> Cost
                 </div>
-                <div className="text-foreground font-semibold">${costUsd.toFixed(4)}</div>
+                <div className="text-foreground font-semibold">
+                  {isStreaming ? (
+                    <span className="text-muted-foreground/60 animate-pulse text-[10px]">
+                      measuring...
+                    </span>
+                  ) : (
+                    `$${costUsd.toFixed(4)}`
+                  )}
+                </div>
               </div>
             </div>
           )}

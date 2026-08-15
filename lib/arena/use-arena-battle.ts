@@ -40,6 +40,53 @@ function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / 3.8));
 }
 
+/**
+ * Maps raw provider errors to stable, safe user-facing guidance.
+ * Prevents leaking internal provider diagnostics, stack traces, or upstream keys.
+ */
+function sanitizeErrorMessage(error: unknown): string {
+  const rawMsg =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "An unexpected error occurred.";
+
+  if (rawMsg.includes("free-models-per-day")) {
+    return "OpenRouter daily free-tier limit reached (50 reqs/day). Please add a small credit ($5-$10) to your OpenRouter account to unlock 1,000 free requests/day, or wait for daily reset.";
+  }
+  if (
+    rawMsg.includes("Rate limit") ||
+    rawMsg.includes("429") ||
+    rawMsg.includes("rate-limited") ||
+    rawMsg.includes("Too Many Requests")
+  ) {
+    return "Model rate limit reached. Please wait a few seconds and try again.";
+  }
+  if (
+    rawMsg.includes("401") ||
+    rawMsg.includes("Unauthorized") ||
+    rawMsg.includes("API key") ||
+    rawMsg.includes("authentication")
+  ) {
+    return "AI model provider authentication issue. Please try again or switch models.";
+  }
+  if (
+    rawMsg.includes("503") ||
+    rawMsg.includes("502") ||
+    rawMsg.includes("504") ||
+    rawMsg.includes("unavailable") ||
+    rawMsg.includes("overloaded")
+  ) {
+    return "The model provider is temporarily unavailable or overloaded. Please retry in a few moments.";
+  }
+  if (rawMsg.includes("prompt-injection") || rawMsg.includes("blocked by safety")) {
+    return "This prompt was flagged by safety filters.";
+  }
+
+  return "The model failed to respond. Please try again or pick a different model.";
+}
+
 export function useArenaBattle({
   threadId,
   initialTurns = [],
@@ -216,10 +263,7 @@ export function useArenaBattle({
                 };
 
                 if (parsed.error?.message) {
-                  const errMsg = parsed.error.message.includes("free-models-per-day")
-                    ? "OpenRouter daily free-tier limit reached (50 requests/day). Wait for midnight UTC reset or add credits."
-                    : parsed.error.message;
-                  throw new Error(errMsg);
+                  throw new Error(sanitizeErrorMessage(parsed.error.message));
                 }
 
                 const content = parsed.choices?.[0]?.delta?.content ?? "";
@@ -365,16 +409,7 @@ export function useArenaBattle({
         } catch (error: unknown) {
           if (controller.signal.aborted) return;
 
-          const rawMsg =
-            error instanceof Error
-              ? error.message
-              : "An unexpected error occurred while communicating with the model.";
-
-          const errorMsg = rawMsg.includes("free-models-per-day")
-            ? "OpenRouter daily free-tier limit reached (50 reqs/day). Please add a small credit ($5-$10) to your OpenRouter account to unlock 1,000 free requests/day, or wait for daily reset."
-            : rawMsg.includes("Rate limit") || rawMsg.includes("429")
-              ? "Model rate limit reached. Please wait a few seconds and try again."
-              : rawMsg;
+          const errorMsg = sanitizeErrorMessage(error);
 
           // Persist failed response state to DB
           await fetch("/api/responses", {
@@ -520,13 +555,7 @@ export function useArenaBattle({
               };
 
               if (parsed.error?.message) {
-                const rawErr = parsed.error.message;
-                const errMsg = rawErr.includes("free-models-per-day")
-                  ? "OpenRouter daily free-tier limit reached (50 requests/day). Wait for midnight UTC reset or add credits."
-                  : rawErr.includes("Rate limit") || rawErr.includes("429")
-                    ? "Model rate limit reached. Please wait a few seconds and try again."
-                    : "The model stream encountered an error. Please retry.";
-                throw new Error(errMsg);
+                throw new Error(sanitizeErrorMessage(parsed.error.message));
               }
 
               const content = parsed.choices?.[0]?.delta?.content ?? "";
@@ -631,7 +660,8 @@ export function useArenaBattle({
           })
         );
       } catch (error: unknown) {
-        const errorMsg = error instanceof Error ? error.message : "Retry attempt failed.";
+        if (controller.signal.aborted) return;
+        const errorMsg = sanitizeErrorMessage(error);
         setActiveStreams((prev) => ({
           ...prev,
           [modelId]: {

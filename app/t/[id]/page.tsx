@@ -23,13 +23,11 @@ export default async function ThreadPage({ params }: ThreadPageProps) {
     notFound();
   }
 
-  // Enforce ownership check on thread reads
-  if (
-    !effectiveUserId ||
-    (thread.user.clerkId !== effectiveUserId && thread.userId !== effectiveUserId)
-  ) {
-    notFound();
-  }
+  // Determine if the current visitor is the owner of this thread
+  const isOwner = Boolean(
+    effectiveUserId &&
+    (thread.user.clerkId === effectiveUserId || thread.userId === effectiveUserId)
+  );
 
   // Fetch full model catalog to resolve names/letters
   const catalog = await fetchModelCatalog();
@@ -93,5 +91,7 @@ export default async function ThreadPage({ params }: ThreadPageProps) {
     })),
   };
 
-  return <ArenaThreadView thread={serializedThread} threadModels={threadModels} />;
+  return (
+    <ArenaThreadView thread={serializedThread} threadModels={threadModels} isOwner={isOwner} />
+  );
 }

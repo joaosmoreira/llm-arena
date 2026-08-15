@@ -9,9 +9,16 @@ interface AppShellProps {
   breadcrumb?: string;
   threadTitle?: string;
   modelRecords?: ModelWinRecord[];
+  showCopyLink?: boolean;
 }
 
-export function AppShell({ children, breadcrumb, threadTitle, modelRecords }: AppShellProps) {
+export function AppShell({
+  children,
+  breadcrumb,
+  threadTitle,
+  modelRecords,
+  showCopyLink = false,
+}: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
 
   return (
@@ -43,6 +50,7 @@ export function AppShell({ children, breadcrumb, threadTitle, modelRecords }: Ap
           breadcrumb={breadcrumb}
           threadTitle={threadTitle}
           modelRecords={modelRecords}
+          showCopyLink={showCopyLink}
         />
 
         {/* Scrollable Work Area */}

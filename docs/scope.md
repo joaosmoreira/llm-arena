@@ -25,7 +25,7 @@ There are rough hand-drawn sketches for the arena screen, the leaderboard, and t
 | 5   | Model picker                                | Slice 1    | done        |
 | 6   | Send a prompt, parallel streams, and voting | Slice 1    | done        |
 | 7   | App shell & thread history                  | Slice 2    | done        |
-| 8   | Public thread visibility & sharing          | Slice 3    | not started |
+| 8   | Public thread visibility & sharing          | Slice 3    | done        |
 | 9   | Leaderboard: global & personal              | Slice 4    | not started |
 
 ## Foundation
@@ -214,8 +214,24 @@ The frame everything else sits inside: a top bar and sidebar that stay in place 
 
 Anyone should be able to open a thread's link and see it, without an account, that's what actually makes it shareable. Only sending a prompt and voting need sign-in. A made-up or deleted thread just shows a plain not-found page either way. The thread's real owner sees everything everyone else sees, plus the ability to actually use it.
 
-- [ ] Decide the approach
-- [ ] Build it
+- [x] Decide the approach
+- [x] Allow public read access to `/t/[id]` for anonymous visitors and non-owners
+- [x] Resolve `isOwner` server-side and pass to `ArenaThreadView`
+- [x] Hide voting buttons ("Pick this") and retry affordances for non-owners
+- [x] Replace interactive composer with quiet read-only notice and "Start new battle" CTA for visitors
+- [x] Add "Copy link" action to top bar with transient copied confirmation
+- [x] Build branded 404 page for missing or deleted threads (`app/not-found.tsx`)
+- [x] Verify typechecking, linting, formatting, and production build
+
+#### Spec: Public Thread Visibility & Sharing
+
+- **Public Reading**: `/t/[id]` loads any valid thread by unguessable ID with no auth gate, allowing anonymous visitors or shared viewers to inspect the full conversation, model responses, live metrics, and winner badges.
+- **Server-Side Ownership Separation**: `isOwner` is resolved server-side in `app/t/[id]/page.tsx` against `getEffectiveUserId()`.
+- **UI Branching**:
+  - **Owner**: Full interactive arena battle with model-locked `PromptDock`, turn voting buttons, and retry actions on failed model calls.
+  - **Visitor / Non-Owner**: Read-only arena view. Voting and retry buttons are completely omitted; bottom composer is replaced by a subtle notification (_"You're viewing a shared thread"_) and a quick shortcut to start their own battle at `/`.
+- **Copy Link Affordance**: A small "Copy link" button in `AppHeader` copies `window.location.href` to clipboard and provides a 2-second visual "Copied" checkmark state.
+- **Honest 404s**: Invalid or deleted thread IDs return a clean branded 404 page within `AppShell`.
 
 ## Slice 4: Leaderboard
 

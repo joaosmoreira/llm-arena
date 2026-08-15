@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { ResponseCard } from "@/components/arena/response-card";
@@ -38,9 +39,10 @@ interface ArenaThreadViewProps {
     }[];
   };
   readonly threadModels: readonly OpenRouterModel[];
+  readonly isOwner?: boolean;
 }
 
-export function ArenaThreadView({ thread, threadModels }: ArenaThreadViewProps) {
+export function ArenaThreadView({ thread, threadModels, isOwner = true }: ArenaThreadViewProps) {
   const searchParams = useSearchParams();
   const autoStream = searchParams.get("stream") === "1";
 
@@ -192,9 +194,14 @@ export function ArenaThreadView({ thread, threadModels }: ArenaThreadViewProps) 
   };
 
   return (
-    <AppShell breadcrumb="Arena" threadTitle={thread.title} modelRecords={modelWinRecords}>
+    <AppShell
+      breadcrumb="Arena"
+      threadTitle={thread.title}
+      modelRecords={modelWinRecords}
+      showCopyLink={true}
+    >
       {/* Scrollable Conversation History */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+      <div className="flex-1 overflow-y-auto p-4 pb-24 md:p-6 md:pb-28">
         <div className="mx-auto flex max-w-7xl flex-col gap-10">
           {turns.map((turn, turnIdx) => {
             const isTurnActive = turn.id === activeTurnId;
@@ -264,16 +271,24 @@ export function ArenaThreadView({ thread, threadModels }: ArenaThreadViewProps) 
                         errorMessage={errorMessage}
                         isWinner={isWinner}
                         canVote={
-                          canVoteOnTurn && !isStreaming && !turn.winnerModelId && !!responseId
+                          isOwner &&
+                          canVoteOnTurn &&
+                          !isStreaming &&
+                          !turn.winnerModelId &&
+                          !!responseId
                         }
                         onVote={() => {
-                          if (responseId) {
+                          if (isOwner && responseId) {
                             void castVote(turn.id, model.id, responseId);
                           }
                         }}
-                        onRetry={() => {
-                          void retryModel(turn.id, model.id, turn.prompt);
-                        }}
+                        onRetry={
+                          isOwner
+                            ? () => {
+                                void retryModel(turn.id, model.id, turn.prompt);
+                              }
+                            : undefined
+                        }
                       />
                     );
                   })}
@@ -284,15 +299,31 @@ export function ArenaThreadView({ thread, threadModels }: ArenaThreadViewProps) 
         </div>
       </div>
 
-      {/* Floating Prompt Input Dock (Models Locked inside Thread) */}
-      <PromptDock
-        prompt={followupPrompt}
-        onPromptChange={setFollowupPrompt}
-        onSubmit={handleSendFollowup}
-        selectedModels={selectedModelChips}
-        disabled={isStreaming}
-        isLocked={true}
-      />
+      {/* Floating Prompt Input Dock (Owner Only) vs Read-Only Notice (Visitors) */}
+      {isOwner ? (
+        <PromptDock
+          prompt={followupPrompt}
+          onPromptChange={setFollowupPrompt}
+          onSubmit={handleSendFollowup}
+          selectedModels={selectedModelChips}
+          disabled={isStreaming}
+          isLocked={true}
+        />
+      ) : (
+        <div className="border-border/60 bg-card/85 fixed inset-x-0 bottom-0 z-10 border-t p-3 backdrop-blur-md">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-2">
+            <p className="text-muted-foreground text-xs leading-relaxed sm:text-sm">
+              You&apos;re viewing a shared thread.
+            </p>
+            <Link
+              href="/"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold shadow-xs transition-colors"
+            >
+              Start new battle
+            </Link>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

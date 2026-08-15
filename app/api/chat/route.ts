@@ -2,7 +2,7 @@ import { z } from "zod";
 import { detectBot, detectPromptInjection, tokenBucket } from "@arcjet/next";
 import { aj } from "@/infrastructure/arcjet";
 import { isAllowedFreeModel } from "@/infrastructure/fetch-model-catalog";
-import { auth } from "@clerk/nextjs/server";
+import { getEffectiveUserId } from "@/lib/auth";
 import { env } from "@/lib/env";
 
 const chatRequestSchema = z.object({
@@ -22,8 +22,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { userId: authUserId } = await auth();
-    const effectiveUserId = authUserId || (env.isDevelopment ? "cmss98a790000tis7rvxgthkw" : null);
+    const effectiveUserId = await getEffectiveUserId();
 
     const body = await req
       .clone()

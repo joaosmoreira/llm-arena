@@ -1,7 +1,7 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { castVote, upsertUser } from "@/lib/db/queries";
-import { env } from "@/lib/env";
+import { getEffectiveUserId, DEV_USER_ID } from "@/lib/auth";
 
 const voteRequestSchema = z.object({
   turnId: z.string().min(1, "Turn ID is required"),
@@ -12,9 +12,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { userId: authUserId } = await auth();
-    const effectiveUserId =
-      authUserId || (env.isDevelopment ? "user_3HsqqgWJZYI8tIIX43n5puWBd7M" : null);
+    const effectiveUserId = await getEffectiveUserId();
 
     if (!effectiveUserId) {
       return Response.json(
@@ -39,11 +37,12 @@ export async function POST(req: Request) {
     const clerkUser = await currentUser();
     const dbUser = await upsertUser({
       clerkId: effectiveUserId,
-      email: clerkUser?.emailAddresses[0]?.emailAddress,
-      name:
-        clerkUser?.firstName || clerkUser?.lastName
+      email: clerkUser?.emailAddresses[0]?.emailAddress ?? `dev-${DEV_USER_ID}@localhost`,
+      name: clerkUser
+        ? clerkUser.firstName || clerkUser.lastName
           ? `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim()
-          : clerkUser?.username || "Anonymous User",
+          : clerkUser.username || "Dev User"
+        : "Dev User",
       imageUrl: clerkUser?.imageUrl,
     });
 

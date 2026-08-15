@@ -1,4 +1,4 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import {
   upsertUser,
@@ -7,9 +7,7 @@ import {
   getUserThreads,
 } from "@/lib/db/queries";
 import { isAllowedFreeModel, fetchModelCatalog } from "@/infrastructure/fetch-model-catalog";
-import { env } from "@/lib/env";
-
-const DEV_USER_ID = "cmss98a790000tis7rvxgthkw";
+import { getEffectiveUserId, DEV_USER_ID } from "@/lib/auth";
 
 const createThreadRequestSchema = z.object({
   prompt: z.string().min(1, "Prompt cannot be empty").max(10000),
@@ -23,8 +21,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { userId: authUserId } = await auth();
-    const effectiveUserId = authUserId || (env.isDevelopment ? DEV_USER_ID : null);
+    const effectiveUserId = await getEffectiveUserId();
 
     if (!effectiveUserId) {
       return Response.json(
@@ -124,8 +121,7 @@ export async function POST(req: Request) {
 
 export async function GET() {
   try {
-    const { userId: authUserId } = await auth();
-    const effectiveUserId = authUserId || (env.isDevelopment ? DEV_USER_ID : null);
+    const effectiveUserId = await getEffectiveUserId();
     if (!effectiveUserId) {
       return Response.json({ threads: [] });
     }

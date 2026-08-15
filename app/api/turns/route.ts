@@ -1,7 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { createTurnWithResponses, getThreadById } from "@/lib/db/queries";
-import { env } from "@/lib/env";
+import { getEffectiveUserId } from "@/lib/auth";
 
 const createTurnRequestSchema = z.object({
   threadId: z.string().min(1, "Thread ID is required"),
@@ -12,8 +11,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { userId: authUserId } = await auth();
-    const effectiveUserId = authUserId || (env.isDevelopment ? "cmss98a790000tis7rvxgthkw" : null);
+    const effectiveUserId = await getEffectiveUserId();
 
     if (!effectiveUserId) {
       return Response.json(

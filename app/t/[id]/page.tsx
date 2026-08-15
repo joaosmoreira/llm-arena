@@ -1,12 +1,9 @@
 import { notFound } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
 import { getThreadById } from "@/lib/db/queries";
 import { fetchModelCatalog, getLetterForModel } from "@/infrastructure/fetch-model-catalog";
 import { ArenaThreadView } from "@/components/arena/arena-thread-view";
 import { type OpenRouterModel } from "@/infrastructure/model-catalog";
-import { env } from "@/lib/env";
-
-const DEV_USER_ID = "cmss98a790000tis7rvxgthkw";
+import { getEffectiveUserId } from "@/lib/auth";
 
 interface ThreadPageProps {
   params: Promise<{
@@ -17,8 +14,7 @@ interface ThreadPageProps {
 export const dynamic = "force-dynamic";
 
 export default async function ThreadPage({ params }: ThreadPageProps) {
-  const { userId: authUserId } = await auth();
-  const effectiveUserId = authUserId || (env.isDevelopment ? DEV_USER_ID : null);
+  const effectiveUserId = await getEffectiveUserId();
 
   const { id } = await params;
   const thread = await getThreadById(id);

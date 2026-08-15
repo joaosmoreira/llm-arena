@@ -1,14 +1,12 @@
-import { auth } from "@clerk/nextjs/server";
 import { saveModelResponse, getTurnById } from "@/lib/db/queries";
 import { saveModelResponseSchema } from "@/lib/db/schema";
-import { env } from "@/lib/env";
+import { getEffectiveUserId } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { userId: authUserId } = await auth();
-    const effectiveUserId = authUserId || (env.isDevelopment ? "cmss98a790000tis7rvxgthkw" : null);
+    const effectiveUserId = await getEffectiveUserId();
 
     if (!effectiveUserId) {
       return Response.json(

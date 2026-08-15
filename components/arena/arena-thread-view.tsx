@@ -121,24 +121,23 @@ export function ArenaThreadView({ thread, threadModels }: ArenaThreadViewProps) 
   }));
 
   // Calculate model win records for header
-  const modelWinRecords = threadModels.map((m) => {
-    const wins = turns.filter((t) => t.winnerModelId === m.id).length;
-    const totalCompletedTurns = turns.filter((t) =>
-      t.responses.some((r) => r.modelId === m.id && r.status === "COMPLETED")
-    ).length;
+  const modelWinRecords = React.useMemo(() => {
+    const totalTurnsInThread = turns.length;
+    return threadModels.map((m) => {
+      const wins = turns.filter((t) => t.winnerModelId === m.id).length;
+      const latestTurn = turns[turns.length - 1];
+      const isCurrentWinner = latestTurn?.winnerModelId === m.id;
 
-    const latestTurn = turns[turns.length - 1];
-    const isCurrentWinner = latestTurn?.winnerModelId === m.id;
-
-    return {
-      id: m.id,
-      letter: m.letter,
-      name: m.name,
-      wins,
-      totalTurns: totalCompletedTurns,
-      isCurrentWinner,
-    };
-  });
+      return {
+        id: m.id,
+        letter: m.letter,
+        name: m.name,
+        wins,
+        totalTurns: totalTurnsInThread,
+        isCurrentWinner,
+      };
+    });
+  }, [threadModels, turns]);
 
   const handleSendFollowup = async () => {
     if (!followupPrompt.trim() || isStreaming) return;

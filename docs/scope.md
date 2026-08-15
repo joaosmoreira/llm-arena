@@ -24,7 +24,7 @@ There are rough hand-drawn sketches for the arena screen, the leaderboard, and t
 | 4   | Design & look                               | Foundation | done        |
 | 5   | Model picker                                | Slice 1    | done        |
 | 6   | Send a prompt, parallel streams, and voting | Slice 1    | done        |
-| 7   | App shell & thread history                  | Slice 2    | not started |
+| 7   | App shell & thread history                  | Slice 2    | done        |
 | 8   | Public thread visibility & sharing          | Slice 3    | not started |
 | 9   | Leaderboard: global & personal              | Slice 4    | not started |
 
@@ -192,8 +192,21 @@ Every prompt sent, every answer finishing, and every vote cast should be tracked
 
 The frame everything else sits inside: a top bar and sidebar that stay in place while the page scrolls, the thread's name, and each model's win record shown right there (shrinking down to a small dot and number if it gets crowded). The sidebar lists a signed-in user's own past threads so the tool actually feels usable across visits, not just in one sitting.
 
-- [ ] Decide the approach
-- [ ] Build it
+- [x] Decide the approach
+- [x] Build sticky AppHeader with breadcrumb, thread title, and responsive shrinking model win record badges
+- [x] Build persistent AppSidebar with time-grouped past threads ("Today", "This week", "Earlier") and turn count badges
+- [x] Implement mobile drawer overlay with smooth slide-in and backdrop dismiss
+- [x] Add active thread indicator and "New Battle" CTA in sidebar
+- [x] Configure cache-busting headers for instant thread list freshness on navigation
+- [x] Verify typechecking, linting, formatting, and production build
+
+#### Spec: App Shell & Thread History
+
+- **Sticky Top Bar**: `AppHeader` maintains fixed position (`h-14`, border-b, backdrop blur) above the scrollable content. Displays breadcrumb, thread title, and responsive model win pills.
+- **Responsive Win Records**: On desktop viewports, displays model letter badge, name, and win ratio (`N Nemotron 2/3`). On crowded/mobile viewports, automatically shrinks to a compact letter/dot and win number (`N: 2`), with full details in tooltip/title, highlighting active winners in emerald green (`#2ea043`).
+- **Sidebar & History Grouping**: `AppSidebar` fetches authenticated user's threads from PostgreSQL via `GET /api/threads` (bypassing stale caches). Automatically groups threads chronologically into "Today", "This week", and "Earlier", rendering turn count chips (`2t`) and active thread indicators.
+- **Mobile Responsive Drawer**: On small screens, the sidebar functions as an overlay drawer with backdrop blur, closing automatically upon navigation or clicking outside.
+- **New Battle & Auth States**: Provides a quick "+ New Battle" button at the top of the history list, with distinct empty states for unauthenticated visitors and new users.
 
 ## Slice 3: Public visibility & sharing
 

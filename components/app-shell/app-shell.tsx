@@ -16,8 +16,23 @@ export function AppShell({ children, breadcrumb, threadTitle, modelRecords }: Ap
 
   return (
     <div className="bg-background text-foreground flex h-screen w-full overflow-hidden font-sans">
-      {/* Persistent Left Sidebar */}
-      <AppSidebar isOpen={sidebarOpen} />
+      {/* Mobile Drawer Backdrop Overlay */}
+      {sidebarOpen && (
+        <div
+          className="bg-background/80 fixed inset-0 z-30 backdrop-blur-xs transition-opacity md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Persistent / Responsive Left Sidebar */}
+      <div
+        className={`fixed inset-y-0 left-0 z-40 h-full md:relative md:z-auto ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        } transition-transform duration-200 ease-in-out md:transition-none`}
+      >
+        <AppSidebar isOpen={sidebarOpen} onCloseMobile={() => setSidebarOpen(false)} />
+      </div>
 
       {/* Main Column */}
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">

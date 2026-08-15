@@ -139,7 +139,14 @@ export async function GET() {
     });
 
     const threads = await getUserThreads(dbUser.id);
-    return Response.json({ threads });
+    return Response.json(
+      { threads },
+      {
+        headers: {
+          "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        },
+      }
+    );
   } catch (error: unknown) {
     console.error("[Get User Threads API Error]", error);
     return Response.json({ threads: [] }, { status: 500 });
